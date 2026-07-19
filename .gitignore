@@ -1,0 +1,26 @@
+# .NET and IDE output
+**/bin/
+**/obj/
+.vs/
+.idea/
+*.user
+*.suo
+*.rsuser
+TestResults/
+artifacts/
+
+# Publish and packaging output
+**/publish/
+*.app
+*.dmg
+*.msix
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+*~
+*.swp
+
+# Local test documents and diagnostics
+*.log
+*.tmp

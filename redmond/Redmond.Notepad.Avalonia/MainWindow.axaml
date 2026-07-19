@@ -1,0 +1,115 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Redmond.Notepad.Avalonia.MainWindow"
+        Title="Untitled - Notepad"
+        Width="900"
+        Height="600"
+        MinWidth="480"
+        MinHeight="320"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource ApplicationPageBackgroundThemeBrush}">
+
+  <Window.Resources>
+    <SolidColorBrush x:Key="ChromeHoverBrush" Color="#11000000" />
+  </Window.Resources>
+
+  <Window.Styles>
+    <Style Selector="Button.chrome">
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Padding" Value="10,5" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+    <Style Selector="Button.chrome:pointerover">
+      <Setter Property="Background" Value="{StaticResource ChromeHoverBrush}" />
+    </Style>
+  </Window.Styles>
+
+  <Grid RowDefinitions="42,38,*,27">
+    <Border BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+            BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="Auto,220,Auto,*" Margin="8,5,8,0">
+        <Image Width="24"
+               Height="24"
+               Margin="4,0,8,5"
+               VerticalAlignment="Center"
+               Source="avares://Redmond%20Notepad/Assets/RedmondNotepadIcon.png" />
+        <Border Grid.Column="1"
+                Margin="0,0,4,0"
+                Padding="12,0"
+                CornerRadius="7,7,0,0"
+                Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock VerticalAlignment="Center" Text="Untitled" />
+            <Button Grid.Column="1"
+                    Classes="chrome"
+                    Width="28"
+                    Height="28"
+                    Padding="0"
+                    Content="×"
+                    AutomationProperties.Name="Close tab" />
+          </Grid>
+        </Border>
+        <Button Grid.Column="2"
+                Classes="chrome"
+                Width="32"
+                Height="32"
+                Padding="0"
+                FontSize="20"
+                Content="+"
+                AutomationProperties.Name="New tab" />
+      </Grid>
+    </Border>
+
+    <StackPanel Grid.Row="1"
+                Margin="7,3"
+                Orientation="Horizontal"
+                Spacing="1">
+      <Button Classes="chrome" Content="File" />
+      <Button Classes="chrome" Content="Edit" />
+      <Button Classes="chrome" Content="View" />
+    </StackPanel>
+
+    <TextBox x:Name="Editor"
+             Grid.Row="2"
+             Padding="14,10"
+             AcceptsReturn="True"
+             AcceptsTab="True"
+             TextWrapping="Wrap"
+             HorizontalContentAlignment="Stretch"
+             VerticalContentAlignment="Stretch"
+             Background="{DynamicResource ApplicationPageBackgroundThemeBrush}"
+             BorderThickness="0"
+             FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
+             FontSize="14"
+             PlaceholderText="Type something…"
+             AutomationProperties.Name="Text editor" />
+
+    <Border Grid.Row="3"
+            BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+            BorderThickness="0,1,0,0">
+      <Grid Margin="12,0"
+            ColumnDefinitions="*,Auto,Auto,Auto,Auto"
+            VerticalAlignment="Center">
+        <TextBlock x:Name="DocumentSummary"
+                   FontSize="12"
+                   Opacity="0.72"
+                   Text="1 line · 0 characters" />
+        <TextBlock x:Name="CursorStatus"
+                   Grid.Column="1"
+                   Margin="14,0"
+                   FontSize="12"
+                   Text="Ln 1, Col 1" />
+        <TextBlock Grid.Column="2" Margin="14,0" FontSize="12" Text="100%" />
+        <TextBlock x:Name="LineEndingStatus"
+                   Grid.Column="3"
+                   Margin="14,0"
+                   FontSize="12"
+                   Text="Windows (CRLF)" />
+        <TextBlock Grid.Column="4" Margin="14,0,2,0" FontSize="12" Text="UTF-8" />
+      </Grid>
+    </Border>
+  </Grid>
+</Window>

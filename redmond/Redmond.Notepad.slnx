@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Redmond.Notepad.Core/Redmond.Notepad.Core.csproj" />
+  <Project Path="Redmond.Notepad.Avalonia/Redmond.Notepad.Avalonia.csproj" />
+</Solution>
