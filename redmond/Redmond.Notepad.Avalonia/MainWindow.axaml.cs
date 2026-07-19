@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia;
+using Avalonia.Interactivity;
 using Redmond.Notepad.Core;
 
 namespace Redmond.Notepad.Avalonia;
@@ -7,6 +8,7 @@ namespace Redmond.Notepad.Avalonia;
 public partial class MainWindow : Window
 {
     private readonly NotepadDocument _document = new();
+    private SettingsWindow? _settingsWindow;
 
     public MainWindow()
     {
@@ -18,6 +20,19 @@ public partial class MainWindow : Window
     }
 
     private void OnOpened(object? sender, EventArgs e) => Editor.Focus();
+
+    private void OnSettingsClick(object? sender, RoutedEventArgs e)
+    {
+        if (_settingsWindow is not null)
+        {
+            _settingsWindow.Activate();
+            return;
+        }
+
+        _settingsWindow = new SettingsWindow();
+        _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+        _settingsWindow.Show(this);
+    }
 
     private void OnEditorTextChanged(object? sender, TextChangedEventArgs e)
     {

@@ -1,0 +1,33 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Redmond.Notepad.Avalonia.AboutSettingsPanel">
+  <UserControl.Styles>
+    <Style Selector="Button.aboutLink">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+    </Style>
+    <Style Selector="Button.aboutAction">
+      <Setter Property="Width" Value="120" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+  </UserControl.Styles>
+
+  <StackPanel Spacing="12">
+    <TextBlock FontWeight="SemiBold" Text="About this app" />
+    <StackPanel Spacing="2">
+      <TextBlock Text="Redmond Notepad 0.1.0" />
+      <TextBlock Text="© 2026 Redmond Project." />
+    </StackPanel>
+    <Button Classes="aboutLink" Content="Microsoft Software License Terms" />
+    <Button Classes="aboutLink" Content="Microsoft Services Agreement" />
+    <Button Classes="aboutLink" Content="Microsoft Privacy Statement" />
+    <Button Classes="aboutLink" Content="Third-Party Software Acknowledgments" />
+    <Button Classes="aboutAction" Margin="0,8,0,0" Content="Send feedback" />
+    <Button Classes="aboutAction" Content="Help" />
+  </StackPanel>
+</UserControl>

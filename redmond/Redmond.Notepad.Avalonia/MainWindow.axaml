@@ -60,6 +60,13 @@
                 FontSize="20"
                 Content="+"
                 AutomationProperties.Name="New tab" />
+        <Button Grid.Column="3"
+                Classes="chrome"
+                HorizontalAlignment="Right"
+                Padding="12,0"
+                Content="Settings"
+                Click="OnSettingsClick"
+                AutomationProperties.Name="Settings" />
       </Grid>
     </Border>
 

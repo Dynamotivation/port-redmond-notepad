@@ -1,0 +1,181 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:Redmond.Notepad.Avalonia"
+        xmlns:shared="using:Redmond.Avalonia.Controls"
+        x:Class="Redmond.Notepad.Avalonia.SettingsWindow"
+        Title="Settings - Notepad"
+        Width="1180"
+        Height="760"
+        MinWidth="520"
+        MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource ApplicationPageBackgroundThemeBrush}">
+
+  <Window.Styles>
+    <Style Selector="TextBlock.sectionHeading">
+      <Setter Property="Margin" Value="0,10,0,6" />
+      <Setter Property="FontSize" Value="14" />
+    </Style>
+    <Style Selector="Border.spellingRow">
+      <Setter Property="Height" Value="56" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RedmondSettingsCardBorderBrush}" />
+      <Setter Property="BorderThickness" Value="0,1,0,0" />
+    </Style>
+    <Style Selector="ToggleSwitch.settingToggle">
+      <Setter Property="OnContent" Value="On" />
+      <Setter Property="OffContent" Value="Off" />
+      <Setter Property="IsChecked" Value="True" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+  </Window.Styles>
+
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                VerticalScrollBarVisibility="Auto">
+    <Grid x:Name="SettingsLayout"
+          Margin="40,30"
+          MaxWidth="1320"
+          ColumnDefinitions="*,300">
+      <StackPanel x:Name="MainSettingsColumn" Spacing="6">
+        <TextBlock Margin="0,0,0,22"
+                   FontSize="36"
+                   FontWeight="SemiBold"
+                   Text="Settings" />
+
+        <TextBlock Classes="sectionHeading" Margin="0,0,0,6" Text="Appearance" />
+        <shared:AnimatedSettingsExpander Header="App theme"
+                                         Description="Select which app theme to display">
+          <shared:AnimatedSettingsExpander.Icon>
+            <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
+                       FontSize="18" Text="◐" />
+          </shared:AnimatedSettingsExpander.Icon>
+          <StackPanel Spacing="8">
+            <RadioButton GroupName="Theme" Content="Use system setting" IsChecked="True" />
+            <RadioButton GroupName="Theme" Content="Light" />
+            <RadioButton GroupName="Theme" Content="Dark" />
+          </StackPanel>
+        </shared:AnimatedSettingsExpander>
+
+        <TextBlock Classes="sectionHeading" Text="Text Formatting" />
+        <shared:AnimatedSettingsExpander Header="Font"
+                                         Description="Choose the editor font, style, and size">
+          <shared:AnimatedSettingsExpander.Icon>
+            <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
+                       FontSize="18" Text="Aa" />
+          </shared:AnimatedSettingsExpander.Icon>
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+            <ComboBox SelectedIndex="0">
+              <ComboBoxItem Content="Cascadia Mono" />
+              <ComboBoxItem Content="Consolas" />
+              <ComboBoxItem Content="System monospace" />
+            </ComboBox>
+            <NumericUpDown Grid.Column="1" Width="100" Minimum="8" Maximum="72" Value="14" />
+          </Grid>
+        </shared:AnimatedSettingsExpander>
+        <shared:SettingsCard Header="Word wrap"
+                             Description="Fit text within window by default">
+          <shared:SettingsCard.Icon>
+            <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="18" Text="↩" />
+          </shared:SettingsCard.Icon>
+          <ToggleSwitch Classes="settingToggle" />
+        </shared:SettingsCard>
+        <shared:SettingsCard Header="Formatting">
+          <shared:SettingsCard.Icon>
+            <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="18" Text="✂" />
+          </shared:SettingsCard.Icon>
+          <ToggleSwitch Classes="settingToggle" />
+        </shared:SettingsCard>
+
+        <TextBlock Classes="sectionHeading" Text="Opening Notepad" />
+        <shared:SettingsCard Header="Opening files"
+                             Description="Choose where your files are opened">
+          <shared:SettingsCard.Icon>
+            <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="17" Text="↗" />
+          </shared:SettingsCard.Icon>
+          <ComboBox Width="164" SelectedIndex="0">
+            <ComboBoxItem Content="Open in a new tab" />
+            <ComboBoxItem Content="Open in a new window" />
+          </ComboBox>
+        </shared:SettingsCard>
+        <shared:AnimatedSettingsExpander Header="When Notepad starts">
+          <shared:AnimatedSettingsExpander.Icon>
+            <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="17" Text="□" />
+          </shared:AnimatedSettingsExpander.Icon>
+          <StackPanel Spacing="8">
+            <RadioButton GroupName="Startup" Content="Open a new window" IsChecked="True" />
+            <RadioButton GroupName="Startup" Content="Continue previous session" />
+          </StackPanel>
+        </shared:AnimatedSettingsExpander>
+        <shared:SettingsCard Header="Recent Files">
+          <shared:SettingsCard.Icon>
+            <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="17" Text="◷" />
+          </shared:SettingsCard.Icon>
+          <ToggleSwitch Classes="settingToggle" />
+        </shared:SettingsCard>
+
+        <TextBlock Classes="sectionHeading" Text="Spelling" />
+        <shared:AnimatedSettingsExpander Header="Spell check"
+                                         Padding="0"
+                                         IsExpanded="True">
+          <shared:AnimatedSettingsExpander.Icon>
+            <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="13" Text="ABC✓" />
+          </shared:AnimatedSettingsExpander.Icon>
+          <StackPanel>
+            <Border Classes="spellingRow">
+              <Grid Margin="68,0,16,0" ColumnDefinitions="*,Auto">
+                <TextBlock VerticalAlignment="Center" Text=".txt" />
+                <ToggleSwitch Grid.Column="1" Classes="settingToggle" />
+              </Grid>
+            </Border>
+            <Border Classes="spellingRow">
+              <Grid Margin="68,0,16,0" ColumnDefinitions="*,Auto">
+                <TextBlock VerticalAlignment="Center" Text=".md" />
+                <ToggleSwitch Grid.Column="1" Classes="settingToggle" />
+              </Grid>
+            </Border>
+            <Border Classes="spellingRow">
+              <Grid Margin="68,0,16,0" ColumnDefinitions="*,Auto">
+                <TextBlock VerticalAlignment="Center" Text=".srt / .ass" />
+                <ToggleSwitch Grid.Column="1" Classes="settingToggle" />
+              </Grid>
+            </Border>
+            <Border Classes="spellingRow">
+              <Grid Margin="68,0,16,0" ColumnDefinitions="*,Auto">
+                <TextBlock VerticalAlignment="Center" Text=".lrc" />
+                <ToggleSwitch Grid.Column="1" Classes="settingToggle" />
+              </Grid>
+            </Border>
+            <Border Classes="spellingRow">
+              <Grid Margin="68,0,16,0" ColumnDefinitions="*,Auto">
+                <TextBlock VerticalAlignment="Center" Text=".lic" />
+                <ToggleSwitch Grid.Column="1" Classes="settingToggle" />
+              </Grid>
+            </Border>
+          </StackPanel>
+        </shared:AnimatedSettingsExpander>
+        <shared:SettingsCard Header="Autocorrect"
+                             Description="Typos are automatically corrected when spell check is turned on">
+          <shared:SettingsCard.Icon>
+            <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="18" Text="✎" />
+          </shared:SettingsCard.Icon>
+          <ToggleSwitch Classes="settingToggle" />
+        </shared:SettingsCard>
+
+        <TextBlock Classes="sectionHeading" Text="Advanced Features" />
+        <shared:SettingsCard Header="Writing tools">
+          <shared:SettingsCard.Icon>
+            <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="18" Text="✣" />
+          </shared:SettingsCard.Icon>
+          <ToggleSwitch Classes="settingToggle" />
+        </shared:SettingsCard>
+
+        <local:AboutSettingsPanel x:Name="NarrowAboutPanel"
+                                  Margin="0,22,0,12"
+                                  IsVisible="False" />
+      </StackPanel>
+
+      <local:AboutSettingsPanel x:Name="WideAboutPanel"
+                                Grid.Column="1"
+                                Margin="56,74,0,0" />
+    </Grid>
+  </ScrollViewer>
+</Window>
