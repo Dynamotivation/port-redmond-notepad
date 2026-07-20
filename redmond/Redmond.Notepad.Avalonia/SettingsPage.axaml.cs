@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Interactivity;
 using Redmond.Avalonia.Controls;
 
 namespace Redmond.Notepad.Avalonia;
@@ -6,6 +7,7 @@ namespace Redmond.Notepad.Avalonia;
 public partial class SettingsPage : UserControl
 {
     private const double WideLayoutThreshold = 900;
+    private bool _isUpdatingTheme;
 
     public SettingsPage()
     {
@@ -17,8 +19,34 @@ public partial class SettingsPage : UserControl
 
     public event EventHandler<WindowAppearanceOptions>? AppearanceChanged;
 
+    public event EventHandler<AppThemePreference>? ThemeChanged;
+
     public void SetAppearance(WindowAppearanceOptions appearance) =>
         WindowAppearancePanel.SetOptions(appearance);
+
+    public void SetThemePreference(AppThemePreference preference)
+    {
+        _isUpdatingTheme = true;
+        SystemThemeButton.IsChecked = preference == AppThemePreference.System;
+        LightThemeButton.IsChecked = preference == AppThemePreference.Light;
+        DarkThemeButton.IsChecked = preference == AppThemePreference.Dark;
+        _isUpdatingTheme = false;
+    }
+
+    private void OnThemeChecked(object? sender, RoutedEventArgs e)
+    {
+        if (_isUpdatingTheme)
+        {
+            return;
+        }
+
+        var preference = ReferenceEquals(sender, DarkThemeButton)
+            ? AppThemePreference.Dark
+            : ReferenceEquals(sender, LightThemeButton)
+                ? AppThemePreference.Light
+                : AppThemePreference.System;
+        ThemeChanged?.Invoke(this, preference);
+    }
 
     private void OnAppearanceChanged(object? sender, WindowAppearanceOptions options) =>
         AppearanceChanged?.Invoke(this, options);

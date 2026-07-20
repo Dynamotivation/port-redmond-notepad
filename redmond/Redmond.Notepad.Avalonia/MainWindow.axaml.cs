@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Styling;
+using System.Collections.ObjectModel;
 using Redmond.Avalonia.Controls;
 using Redmond.Avalonia.Windowing;
 using Redmond.Notepad.Core;
@@ -12,22 +13,36 @@ namespace Redmond.Notepad.Avalonia;
 
 public partial class MainWindow : Window
 {
-    private readonly NotepadDocument _document = new();
+    private readonly NotepadWorkspace _workspace = new();
+    private readonly ObservableCollection<NotepadTab> _tabs = [];
     private readonly WindowAppearanceController _appearanceController;
     private WindowAppearanceOptions _appearance;
+    private AppThemePreference _themePreference;
+    private bool _isLoadingTab;
 
     public MainWindow()
     {
         InitializeComponent();
         _appearance = NotepadSettingsStore.LoadAppearance();
+        _themePreference = NotepadSettingsStore.LoadThemePreference();
         _appearanceController = WindowAppearanceController.Attach(this, WindowSurface, _appearance);
         _appearanceController.PresentationChanged += (_, _) => UpdateWindowPresentation();
         SettingsPage.SetAppearance(_appearance);
+        SettingsPage.SetThemePreference(_themePreference);
         SettingsPage.AppearanceChanged += OnAppearanceChanged;
+        SettingsPage.ThemeChanged += OnThemeChanged;
+        foreach (var tab in _workspace.Tabs)
+        {
+            _tabs.Add(tab);
+        }
+        TabsList.ItemsSource = _tabs;
+        TabsList.SelectedItem = _workspace.SelectedTab;
         UpdateWindowPresentation();
         Editor.TextChanged += OnEditorTextChanged;
         Editor.PropertyChanged += OnEditorPropertyChanged;
         Opened += OnOpened;
+        PropertyChanged += OnWindowPropertyChanged;
+        LoadSelectedTab();
         RefreshDocumentStatus();
     }
 
@@ -36,6 +51,7 @@ public partial class MainWindow : Window
     private void OnSettingsClick(object? sender, RoutedEventArgs e)
     {
         SettingsPage.SetAppearance(_appearance);
+        SettingsPage.SetThemePreference(_themePreference);
         DocumentTitleBar.IsVisible = false;
         DocumentPage.IsVisible = false;
         SettingsTitleBar.IsVisible = true;
@@ -61,6 +77,72 @@ public partial class MainWindow : Window
         UpdateWindowPresentation();
     }
 
+    private void OnThemeChanged(object? sender, AppThemePreference preference)
+    {
+        _themePreference = preference;
+        App.ApplyThemePreference(preference);
+        NotepadSettingsStore.SaveThemePreference(preference);
+        UpdateWindowPresentation();
+    }
+
+    private void OnWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == ActualThemeVariantProperty)
+        {
+            UpdateWindowPresentation();
+        }
+    }
+
+    private void OnNewTabClick(object? sender, RoutedEventArgs e)
+    {
+        var tab = _workspace.CreateTab();
+        _tabs.Add(tab);
+        TabsList.SelectedItem = tab;
+        LoadSelectedTab();
+    }
+
+    private void OnCloseTabClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { CommandParameter: NotepadTab tab })
+        {
+            return;
+        }
+
+        var replacement = _workspace.CloseTab(tab);
+        _tabs.Remove(tab);
+        if (!_tabs.Contains(replacement))
+        {
+            _tabs.Add(replacement);
+        }
+
+        TabsList.SelectedItem = replacement;
+        LoadSelectedTab();
+        e.Handled = true;
+    }
+
+    private void OnTabSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (TabsList.SelectedItem is not NotepadTab tab || ReferenceEquals(tab, _workspace.SelectedTab))
+        {
+            return;
+        }
+
+        _workspace.SelectTab(tab);
+        LoadSelectedTab();
+    }
+
+    private void LoadSelectedTab()
+    {
+        _isLoadingTab = true;
+        Editor.Text = _workspace.SelectedTab.Document.Text;
+        Editor.CaretIndex = Editor.Text?.Length ?? 0;
+        _isLoadingTab = false;
+        Title = $"{_workspace.SelectedTab.Title} - Notepad";
+        RefreshDocumentStatus();
+        RefreshCursorStatus();
+        Editor.Focus();
+    }
+
     private void UpdateWindowPresentation()
     {
         var useNativeControls = _appearance.ControlStyle == WindowControlStyle.MacOS;
@@ -76,6 +158,9 @@ public partial class MainWindow : Window
         SettingsTitleBarContent.Margin = new Thickness(leftInset, 0, captionWidth, 0);
 
         var dark = ActualThemeVariant == ThemeVariant.Dark;
+        DocumentTitleBar.Background = _appearanceController.IsBackdropActive
+            ? Brushes.Transparent
+            : new SolidColorBrush(Color.Parse(dark ? "#202020" : "#F3F3F3"));
         WindowSurface.Background = new SolidColorBrush(Color.Parse(
             _appearanceController.IsBackdropActive
                 ? dark ? "#18383D40" : "#18F3F3F3"
@@ -84,7 +169,12 @@ public partial class MainWindow : Window
 
     private void OnEditorTextChanged(object? sender, TextChangedEventArgs e)
     {
-        _document.ReplaceText(Editor.Text);
+        if (_isLoadingTab)
+        {
+            return;
+        }
+
+        _workspace.SelectedTab.Document.ReplaceText(Editor.Text);
         RefreshDocumentStatus();
         RefreshCursorStatus();
     }
@@ -99,10 +189,11 @@ public partial class MainWindow : Window
 
     private void RefreshDocumentStatus()
     {
-        var lineLabel = _document.LineCount == 1 ? "line" : "lines";
-        var characterLabel = _document.CharacterCount == 1 ? "character" : "characters";
-        DocumentSummary.Text = $"{_document.LineCount} {lineLabel} · {_document.CharacterCount} {characterLabel}";
-        LineEndingStatus.Text = _document.LineEndingDisplayText;
+        var document = _workspace.SelectedTab.Document;
+        var lineLabel = document.LineCount == 1 ? "line" : "lines";
+        var characterLabel = document.CharacterCount == 1 ? "character" : "characters";
+        DocumentSummary.Text = $"{document.LineCount} {lineLabel} · {document.CharacterCount} {characterLabel}";
+        LineEndingStatus.Text = document.LineEndingDisplayText;
     }
 
     private void RefreshCursorStatus()

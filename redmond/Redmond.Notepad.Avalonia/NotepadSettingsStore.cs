@@ -9,6 +9,43 @@ internal static class NotepadSettingsStore
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "RedmondNotepad");
     private static readonly string SettingsPath = Path.Combine(SettingsDirectory, "settings.json");
+    private static readonly string ThemePath = Path.Combine(SettingsDirectory, "theme.txt");
+
+    public static AppThemePreference LoadThemePreference()
+    {
+        try
+        {
+            return File.Exists(ThemePath)
+                && Enum.TryParse<AppThemePreference>(File.ReadAllText(ThemePath), ignoreCase: true, out var preference)
+                    ? preference
+                    : AppThemePreference.System;
+        }
+        catch (IOException)
+        {
+            return AppThemePreference.System;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return AppThemePreference.System;
+        }
+    }
+
+    public static void SaveThemePreference(AppThemePreference preference)
+    {
+        try
+        {
+            Directory.CreateDirectory(SettingsDirectory);
+            File.WriteAllText(ThemePath, preference.ToString());
+        }
+        catch (IOException)
+        {
+            // Theme remains live when persistence is unavailable.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Theme remains live when persistence is unavailable.
+        }
+    }
 
     public static WindowAppearanceOptions LoadAppearance()
     {

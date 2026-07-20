@@ -15,8 +15,29 @@
         TransparencyBackgroundFallback="#F3F3F3">
 
   <Window.Resources>
-    <SolidColorBrush x:Key="ChromeHoverBrush" Color="#11000000" />
-    <FontFamily x:Key="RedmondFluentIconFont">avares://Redmond.Avalonia.Controls/Assets/RedmondFluentIcons.ttf#Calculator Fluent Icons</FontFamily>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="ChromeHoverBrush" Color="#343C4B" />
+          <SolidColorBrush x:Key="NotepadTitleBarBrush" Color="#202020" />
+          <SolidColorBrush x:Key="NotepadSelectedTabBrush" Color="#1B202B" />
+          <SolidColorBrush x:Key="NotepadMenuBarBrush" Color="#1B202B" />
+          <SolidColorBrush x:Key="NotepadEditorBrush" Color="#292B32" />
+          <SolidColorBrush x:Key="NotepadStatusBrush" Color="#1B2332" />
+          <SolidColorBrush x:Key="NotepadDividerBrush" Color="#364052" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="ChromeHoverBrush" Color="#11000000" />
+          <SolidColorBrush x:Key="NotepadTitleBarBrush" Color="#F3F3F3" />
+          <SolidColorBrush x:Key="NotepadSelectedTabBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="NotepadMenuBarBrush" Color="#F9F9F9" />
+          <SolidColorBrush x:Key="NotepadEditorBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="NotepadStatusBrush" Color="#F3F3F3" />
+          <SolidColorBrush x:Key="NotepadDividerBrush" Color="#D8D8D8" />
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+      <FontFamily x:Key="RedmondFluentIconFont">avares://Redmond.Avalonia.Controls/Assets/RedmondFluentIcons.ttf#Calculator Fluent Icons</FontFamily>
+    </ResourceDictionary>
   </Window.Resources>
 
   <Window.Styles>
@@ -29,7 +50,64 @@
       <Setter Property="CornerRadius" Value="4" />
     </Style>
     <Style Selector="Button.chrome:pointerover">
-      <Setter Property="Background" Value="{StaticResource ChromeHoverBrush}" />
+      <Setter Property="Background" Value="{DynamicResource ChromeHoverBrush}" />
+    </Style>
+    <Style Selector="ListBox.tabStrip">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="ListBox.tabStrip ListBoxItem">
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0,0,3,0" />
+      <Setter Property="CornerRadius" Value="8,8,0,0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="{TemplateBinding Background}"
+                  CornerRadius="{TemplateBinding CornerRadius}">
+            <ContentPresenter Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </Style>
+    <Style Selector="ListBox.tabStrip ListBoxItem:pointerover">
+      <Setter Property="Background" Value="{DynamicResource ChromeHoverBrush}" />
+    </Style>
+    <Style Selector="ListBox.tabStrip ListBoxItem:selected">
+      <Setter Property="Background" Value="{DynamicResource NotepadSelectedTabBrush}" />
+    </Style>
+    <Style Selector="ListBox.tabStrip ListBoxItem:selected:pointerover">
+      <Setter Property="Background" Value="{DynamicResource NotepadSelectedTabBrush}" />
+    </Style>
+    <Style Selector="ListBox.tabStrip ListBoxItem:selected:focus">
+      <Setter Property="Background" Value="{DynamicResource NotepadSelectedTabBrush}" />
+    </Style>
+    <Style Selector="TextBox.editor">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="FocusAdorner" Value="{x:Null}" />
+    </Style>
+    <Style Selector="TextBox.editor:focus">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="TextBox.editor /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="TextBox.editor:focus /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
     </Style>
   </Window.Styles>
 
@@ -41,42 +119,83 @@
           CornerRadius="8"
           ClipToBounds="True">
   <Grid RowDefinitions="42,38,*,27">
-    <Grid x:Name="DocumentTitleBar">
+    <Grid x:Name="DocumentTitleBar"
+          Background="{DynamicResource NotepadTitleBarBrush}">
       <shared:WindowDragRegion BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
                                BorderThickness="0,0,0,1" />
       <Grid x:Name="TitleBarContent"
-            ColumnDefinitions="Auto,220,Auto,*"
+            ColumnDefinitions="Auto,*"
             Margin="8,5,0,0">
-        <Image Width="24"
-               Height="24"
-               Margin="4,0,8,5"
+        <Image Width="18"
+               Height="18"
+               Margin="6,0,10,5"
                IsHitTestVisible="False"
                VerticalAlignment="Center"
                Source="avares://Redmond%20Notepad/Assets/RedmondNotepadIcon.png" />
-        <Border Grid.Column="1"
-                Margin="0,0,4,0"
-                Padding="12,0"
-                CornerRadius="7,7,0,0"
-                Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}">
-          <Grid ColumnDefinitions="*,Auto">
-            <TextBlock VerticalAlignment="Center" Text="Untitled" />
-            <Button Grid.Column="1"
-                    Classes="chrome"
+        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Left">
+          <ListBox x:Name="TabsList"
+                   Classes="tabStrip"
+                   MaxWidth="610"
+                   Height="37"
+                   SelectionMode="Single"
+                   SelectionChanged="OnTabSelectionChanged"
+                   ScrollViewer.HorizontalScrollBarVisibility="Hidden"
+                   ScrollViewer.VerticalScrollBarVisibility="Disabled">
+            <ListBox.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" />
+              </ItemsPanelTemplate>
+            </ListBox.ItemsPanel>
+            <ListBox.ItemTemplate>
+              <DataTemplate x:CompileBindings="False">
+                <Grid Width="210" Height="37" ColumnDefinitions="*,34">
+                  <TextBlock Margin="12,0,4,0"
+                             VerticalAlignment="Center"
+                             TextTrimming="CharacterEllipsis"
+                             Text="{Binding Title}" />
+                  <Button Grid.Column="1"
+                          Classes="chrome"
+                          Width="28"
+                          Height="28"
+                          Padding="0"
+                          HorizontalContentAlignment="Center"
+                          VerticalContentAlignment="Center"
+                          CommandParameter="{Binding}"
+                          Click="OnCloseTabClick"
+                          AutomationProperties.Name="Close tab">
+                    <Path Width="10"
+                          Height="10"
+                          Stretch="Uniform"
+                          Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                          StrokeThickness="1.4"
+                          StrokeLineCap="Round"
+                          Data="M 1,1 L 9,9 M 9,1 L 1,9" />
+                  </Button>
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+          <Grid Width="37" Height="37">
+            <Button Classes="chrome"
                     Width="28"
                     Height="28"
                     Padding="0"
-                    Content="×"
-                    AutomationProperties.Name="Close tab" />
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    HorizontalContentAlignment="Center"
+                    VerticalContentAlignment="Center"
+                    Click="OnNewTabClick"
+                    AutomationProperties.Name="New tab">
+              <Path Width="12"
+                    Height="12"
+                    Stretch="Uniform"
+                    Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                    StrokeThickness="1.4"
+                    StrokeLineCap="Round"
+                    Data="M 6,0 L 6,12 M 0,6 L 12,6" />
+            </Button>
           </Grid>
-        </Border>
-        <Button Grid.Column="2"
-                Classes="chrome"
-                Width="32"
-                Height="32"
-                Padding="0"
-                FontSize="20"
-                Content="+"
-                AutomationProperties.Name="New tab" />
+        </StackPanel>
       </Grid>
     </Grid>
 
@@ -117,7 +236,10 @@
           Grid.Row="1"
           Grid.RowSpan="3"
           RowDefinitions="38,*,27">
-    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="7,3">
+    <Border Grid.Row="0" Background="{DynamicResource NotepadMenuBarBrush}">
+    <Grid x:Name="DocumentMenuBar"
+          ColumnDefinitions="*,Auto"
+          Margin="7,3">
       <StackPanel Orientation="Horizontal" Spacing="1">
         <Button Classes="chrome" Content="File" />
         <Button Classes="chrome" Content="Edit" />
@@ -140,24 +262,26 @@
                    Text="&#xE713;" />
       </Button>
     </Grid>
+    </Border>
 
+    <Border Grid.Row="1" Background="{DynamicResource NotepadEditorBrush}">
     <TextBox x:Name="Editor"
-             Grid.Row="1"
+             Classes="editor"
              Padding="14,10"
              AcceptsReturn="True"
              AcceptsTab="True"
              TextWrapping="Wrap"
              HorizontalContentAlignment="Stretch"
              VerticalContentAlignment="Stretch"
-             Background="{DynamicResource ApplicationPageBackgroundThemeBrush}"
-             BorderThickness="0"
              FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
              FontSize="14"
              PlaceholderText="Type something…"
              AutomationProperties.Name="Text editor" />
+    </Border>
 
     <Border Grid.Row="2"
-            BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+            Background="{DynamicResource NotepadStatusBrush}"
+            BorderBrush="{DynamicResource NotepadDividerBrush}"
             BorderThickness="0,1,0,0">
       <Grid Margin="12,0"
             ColumnDefinitions="*,Auto,Auto,Auto,Auto"

@@ -44,9 +44,12 @@
                        FontSize="18" Text="◐" />
           </shared:AnimatedSettingsExpander.Icon>
           <StackPanel Spacing="8">
-            <RadioButton GroupName="Theme" Content="Use system setting" IsChecked="True" />
-            <RadioButton GroupName="Theme" Content="Light" />
-            <RadioButton GroupName="Theme" Content="Dark" />
+            <RadioButton x:Name="SystemThemeButton" GroupName="Theme" Content="Use system setting"
+                         Click="OnThemeChecked" />
+            <RadioButton x:Name="LightThemeButton" GroupName="Theme" Content="Light"
+                         Click="OnThemeChecked" />
+            <RadioButton x:Name="DarkThemeButton" GroupName="Theme" Content="Dark"
+                         Click="OnThemeChecked" />
           </StackPanel>
         </shared:AnimatedSettingsExpander>
 
