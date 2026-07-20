@@ -15,7 +15,6 @@ public partial class MainWindow : Window
     private readonly NotepadDocument _document = new();
     private readonly WindowAppearanceController _appearanceController;
     private WindowAppearanceOptions _appearance;
-    private SettingsWindow? _settingsWindow;
 
     public MainWindow()
     {
@@ -23,6 +22,8 @@ public partial class MainWindow : Window
         _appearance = NotepadSettingsStore.LoadAppearance();
         _appearanceController = WindowAppearanceController.Attach(this, WindowSurface, _appearance);
         _appearanceController.PresentationChanged += (_, _) => UpdateWindowPresentation();
+        SettingsPage.SetAppearance(_appearance);
+        SettingsPage.AppearanceChanged += OnAppearanceChanged;
         UpdateWindowPresentation();
         Editor.TextChanged += OnEditorTextChanged;
         Editor.PropertyChanged += OnEditorPropertyChanged;
@@ -34,16 +35,20 @@ public partial class MainWindow : Window
 
     private void OnSettingsClick(object? sender, RoutedEventArgs e)
     {
-        if (_settingsWindow is not null)
-        {
-            _settingsWindow.Activate();
-            return;
-        }
+        SettingsPage.SetAppearance(_appearance);
+        DocumentTitleBar.IsVisible = false;
+        DocumentPage.IsVisible = false;
+        SettingsTitleBar.IsVisible = true;
+        SettingsPage.IsVisible = true;
+    }
 
-        _settingsWindow = new SettingsWindow(_appearance);
-        _settingsWindow.AppearanceChanged += OnAppearanceChanged;
-        _settingsWindow.Closed += (_, _) => _settingsWindow = null;
-        _settingsWindow.Show(this);
+    private void OnBackFromSettingsClick(object? sender, RoutedEventArgs e)
+    {
+        SettingsTitleBar.IsVisible = false;
+        SettingsPage.IsVisible = false;
+        DocumentTitleBar.IsVisible = true;
+        DocumentPage.IsVisible = true;
+        Editor.Focus();
     }
 
     private void OnAppearanceChanged(object? sender, WindowAppearanceOptions options)
@@ -61,14 +66,17 @@ public partial class MainWindow : Window
         CaptionButtons.IsVisible = !useNativeControls;
         CaptionButtons.ControlStyle = _appearance.ControlStyle;
         ResizeHandles.IsVisible = _appearanceController.UsesCustomResizeHandles;
-        TitleBarContent.Margin = useHostedMacOSControls
-            ? new Thickness(64, 5, 0, 0)
-            : new Thickness(8, 5, 0, 0);
+        var captionWidth = useNativeControls
+            ? 0
+            : _appearance.ControlStyle == WindowControlStyle.Windows10 ? 138 : 180;
+        var leftInset = useHostedMacOSControls ? 64 : 8;
+        TitleBarContent.Margin = new Thickness(leftInset, 5, captionWidth, 0);
+        SettingsTitleBarContent.Margin = new Thickness(leftInset, 0, captionWidth, 0);
 
         var dark = ActualThemeVariant == ThemeVariant.Dark;
         WindowSurface.Background = new SolidColorBrush(Color.Parse(
             _appearance.UseSystemBackdrop
-                ? dark ? "#D9202027" : "#D9F3F3F3"
+                ? dark ? "#18383D40" : "#18F3F3F3"
                 : dark ? "#202027" : "#F3F3F3"));
     }
 

@@ -1,41 +1,12 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:local="using:Redmond.Notepad.Avalonia"
-        xmlns:shared="using:Redmond.Avalonia.Controls"
-        xmlns:windowing="using:Redmond.Avalonia.Windowing"
-        x:Class="Redmond.Notepad.Avalonia.SettingsWindow"
-        Title="Settings - Notepad"
-        Width="1180"
-        Height="760"
-        MinWidth="520"
-        MinHeight="420"
-        WindowStartupLocation="CenterOwner"
-        Background="Transparent"
-        TransparencyLevelHint="Transparent"
-        TransparencyBackgroundFallback="#F3F3F3">
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Redmond.Notepad.Avalonia"
+             xmlns:shared="using:Redmond.Avalonia.Controls"
+             xmlns:windowing="using:Redmond.Avalonia.Windowing"
+             x:Class="Redmond.Notepad.Avalonia.SettingsPage"
+             Background="Transparent">
 
-  <Window.Resources>
-    <ResourceDictionary>
-      <ResourceDictionary.ThemeDictionaries>
-        <ResourceDictionary x:Key="Dark">
-          <SolidColorBrush x:Key="SettingsPageMaterialBrush" Color="#D9202027" />
-          <SolidColorBrush x:Key="SettingsPageSolidBrush" Color="#202027" />
-        </ResourceDictionary>
-        <ResourceDictionary x:Key="Light">
-          <SolidColorBrush x:Key="SettingsPageMaterialBrush" Color="#D9F3F3F3" />
-          <SolidColorBrush x:Key="SettingsPageSolidBrush" Color="#F3F3F3" />
-        </ResourceDictionary>
-      </ResourceDictionary.ThemeDictionaries>
-    </ResourceDictionary>
-  </Window.Resources>
-
-  <Window.Styles>
-    <Style Selector="Border.settingsSurface">
-      <Setter Property="Background" Value="{DynamicResource SettingsPageMaterialBrush}" />
-    </Style>
-    <Style Selector="Border.settingsSurface.noBackdrop">
-      <Setter Property="Background" Value="{DynamicResource SettingsPageSolidBrush}" />
-    </Style>
+  <UserControl.Styles>
     <Style Selector="TextBlock.sectionHeading">
       <Setter Property="Margin" Value="0,10,0,6" />
       <Setter Property="FontSize" Value="14" />
@@ -51,9 +22,8 @@
       <Setter Property="IsChecked" Value="True" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
-  </Window.Styles>
+  </UserControl.Styles>
 
-  <Border x:Name="SettingsSurface" Classes="settingsSurface">
   <ScrollViewer HorizontalScrollBarVisibility="Disabled"
                 VerticalScrollBarVisibility="Auto"
                 Background="Transparent">
@@ -206,5 +176,4 @@
                                 Margin="56,74,0,0" />
     </Grid>
   </ScrollViewer>
-  </Border>
-</Window>
+</UserControl>
