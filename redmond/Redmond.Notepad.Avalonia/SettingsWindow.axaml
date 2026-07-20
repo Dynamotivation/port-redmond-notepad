@@ -10,9 +10,32 @@
         MinWidth="520"
         MinHeight="420"
         WindowStartupLocation="CenterOwner"
-        Background="{DynamicResource ApplicationPageBackgroundThemeBrush}">
+        Background="Transparent"
+        TransparencyLevelHint="Transparent"
+        TransparencyBackgroundFallback="#F3F3F3">
+
+  <Window.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="SettingsPageMaterialBrush" Color="#D9202027" />
+          <SolidColorBrush x:Key="SettingsPageSolidBrush" Color="#202027" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="SettingsPageMaterialBrush" Color="#D9F3F3F3" />
+          <SolidColorBrush x:Key="SettingsPageSolidBrush" Color="#F3F3F3" />
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+    </ResourceDictionary>
+  </Window.Resources>
 
   <Window.Styles>
+    <Style Selector="Border.settingsSurface">
+      <Setter Property="Background" Value="{DynamicResource SettingsPageMaterialBrush}" />
+    </Style>
+    <Style Selector="Border.settingsSurface.noBackdrop">
+      <Setter Property="Background" Value="{DynamicResource SettingsPageSolidBrush}" />
+    </Style>
     <Style Selector="TextBlock.sectionHeading">
       <Setter Property="Margin" Value="0,10,0,6" />
       <Setter Property="FontSize" Value="14" />
@@ -30,8 +53,10 @@
     </Style>
   </Window.Styles>
 
+  <Border x:Name="SettingsSurface" Classes="settingsSurface">
   <ScrollViewer HorizontalScrollBarVisibility="Disabled"
-                VerticalScrollBarVisibility="Auto">
+                VerticalScrollBarVisibility="Auto"
+                Background="Transparent">
     <Grid x:Name="SettingsLayout"
           Margin="40,30"
           MaxWidth="1320"
@@ -181,4 +206,5 @@
                                 Margin="56,74,0,0" />
     </Grid>
   </ScrollViewer>
+  </Border>
 </Window>
