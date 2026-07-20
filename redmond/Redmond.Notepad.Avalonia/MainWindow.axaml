@@ -55,24 +55,56 @@
     <Style Selector="ListBox.tabStrip">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="Padding" Value="0" />
+      <Setter Property="Padding" Value="0,0,16,0" />
+      <Setter Property="Margin" Value="-8,0,-8,0" />
+      <Setter Property="ZIndex" Value="1" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <ItemsPresenter Name="PART_ItemsPresenter"
+                          Margin="{TemplateBinding Padding}"
+                          ItemsPanel="{TemplateBinding ItemsPanel}" />
+        </ControlTemplate>
+      </Setter>
     </Style>
     <Style Selector="ListBox.tabStrip ListBoxItem">
       <Setter Property="MinHeight" Value="0" />
       <Setter Property="Padding" Value="0" />
-      <Setter Property="Margin" Value="0,0,3,0" />
+      <Setter Property="Margin" Value="0,0,-16,0" />
       <Setter Property="CornerRadius" Value="8,8,0,0" />
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
       <Setter Property="Template">
         <ControlTemplate>
-          <Border Background="{TemplateBinding Background}"
-                  CornerRadius="{TemplateBinding CornerRadius}">
-            <ContentPresenter Content="{TemplateBinding Content}"
-                              ContentTemplate="{TemplateBinding ContentTemplate}"
-                              HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
-                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
-          </Border>
+          <Grid ClipToBounds="False">
+            <Path Classes="inverseCorner"
+                  Width="8"
+                  Height="8"
+                  HorizontalAlignment="Left"
+                  VerticalAlignment="Bottom"
+                  IsHitTestVisible="False"
+                  IsVisible="False"
+                  Fill="{TemplateBinding Background}"
+                  Stretch="Fill"
+                  Data="M 8,0 L 8,8 L 0,8 C 4.4,8 8,4.4 8,0 Z" />
+            <Path Classes="inverseCorner"
+                  Width="8"
+                  Height="8"
+                  HorizontalAlignment="Right"
+                  VerticalAlignment="Bottom"
+                  IsHitTestVisible="False"
+                  IsVisible="False"
+                  Fill="{TemplateBinding Background}"
+                  Stretch="Fill"
+                  Data="M 0,0 L 0,8 L 8,8 C 3.6,8 0,4.4 0,0 Z" />
+            <Border Margin="8,0"
+                    Background="{TemplateBinding Background}"
+                    CornerRadius="{TemplateBinding CornerRadius}">
+              <ContentPresenter Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}"
+                                HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+            </Border>
+          </Grid>
         </ControlTemplate>
       </Setter>
     </Style>
@@ -81,12 +113,16 @@
     </Style>
     <Style Selector="ListBox.tabStrip ListBoxItem:selected">
       <Setter Property="Background" Value="{DynamicResource NotepadSelectedTabBrush}" />
+      <Setter Property="ZIndex" Value="1" />
     </Style>
     <Style Selector="ListBox.tabStrip ListBoxItem:selected:pointerover">
       <Setter Property="Background" Value="{DynamicResource NotepadSelectedTabBrush}" />
     </Style>
     <Style Selector="ListBox.tabStrip ListBoxItem:selected:focus">
       <Setter Property="Background" Value="{DynamicResource NotepadSelectedTabBrush}" />
+    </Style>
+    <Style Selector="ListBox.tabStrip ListBoxItem:selected /template/ Path.inverseCorner">
+      <Setter Property="IsVisible" Value="True" />
     </Style>
     <Style Selector="TextBox.editor">
       <Setter Property="Background" Value="Transparent" />
@@ -171,6 +207,15 @@
                           StrokeLineCap="Round"
                           Data="M 1,1 L 9,9 M 9,1 L 1,9" />
                   </Button>
+                  <Border Grid.ColumnSpan="2"
+                          Width="1"
+                          Height="22.2"
+                          HorizontalAlignment="Left"
+                          VerticalAlignment="Center"
+                          IsHitTestVisible="False"
+                          IsVisible="{Binding ShowLeadingSeparator}"
+                          Opacity="0.6"
+                          Background="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
                 </Grid>
               </DataTemplate>
             </ListBox.ItemTemplate>
