@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:windowing="using:Redmond.Avalonia.Windowing"
         x:Class="Redmond.Notepad.Avalonia.MainWindow"
         Title="Untitled - Notepad"
         Width="900"
@@ -7,7 +8,10 @@
         MinWidth="480"
         MinHeight="320"
         WindowStartupLocation="CenterScreen"
-        Background="{DynamicResource ApplicationPageBackgroundThemeBrush}">
+        WindowDecorations="None"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent"
+        TransparencyBackgroundFallback="#F3F3F3">
 
   <Window.Resources>
     <SolidColorBrush x:Key="ChromeHoverBrush" Color="#11000000" />
@@ -27,10 +31,20 @@
     </Style>
   </Window.Styles>
 
+  <Grid>
+  <Border x:Name="WindowSurface"
+          Background="{DynamicResource ApplicationPageBackgroundThemeBrush}"
+          BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+          BorderThickness="1"
+          CornerRadius="8"
+          ClipToBounds="True">
   <Grid RowDefinitions="42,38,*,27">
     <Border BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
-            BorderThickness="0,0,0,1">
-      <Grid ColumnDefinitions="Auto,220,Auto,*" Margin="8,5,8,0">
+            BorderThickness="0,0,0,1"
+            PointerPressed="OnTitleBarPointerPressed">
+      <Grid x:Name="TitleBarContent"
+            ColumnDefinitions="Auto,220,Auto,*,Auto"
+            Margin="8,5,0,0">
         <Image Width="24"
                Height="24"
                Margin="4,0,8,5"
@@ -67,6 +81,9 @@
                 Content="Settings"
                 Click="OnSettingsClick"
                 AutomationProperties.Name="Settings" />
+        <windowing:WindowCaptionButtons x:Name="CaptionButtons"
+                                        Grid.Column="4"
+                                        Margin="0,-5,0,0" />
       </Grid>
     </Border>
 
@@ -118,5 +135,8 @@
         <TextBlock Grid.Column="4" Margin="14,0,2,0" FontSize="12" Text="UTF-8" />
       </Grid>
     </Border>
+  </Grid>
+  </Border>
+  <windowing:WindowResizeHandles x:Name="ResizeHandles" />
   </Grid>
 </Window>

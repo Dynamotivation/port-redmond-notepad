@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="../../Redmond.Avalonia.Controls/Redmond.Avalonia.Controls.csproj" />
+  <Project Path="../../Redmond.Avalonia.Windowing/Redmond.Avalonia.Windowing.csproj" />
   <Project Path="Redmond.Notepad.Core/Redmond.Notepad.Core.csproj" />
   <Project Path="Redmond.Notepad.Avalonia/Redmond.Notepad.Avalonia.csproj" />
 </Solution>

@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../../Redmond.Avalonia.Controls/Redmond.Avalonia.Controls.csproj" />
+    <ProjectReference Include="../../../Redmond.Avalonia.Windowing/Redmond.Avalonia.Windowing.csproj" />
     <ProjectReference Include="../Redmond.Notepad.Core/Redmond.Notepad.Core.csproj" />
     <AvaloniaResource Include="Assets/RedmondNotepadIcon.png" />
   </ItemGroup>
