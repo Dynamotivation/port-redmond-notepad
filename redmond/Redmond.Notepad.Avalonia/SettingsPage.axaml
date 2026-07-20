@@ -2,7 +2,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:Redmond.Notepad.Avalonia"
              xmlns:shared="using:Redmond.Avalonia.Controls"
-             xmlns:windowing="using:Redmond.Avalonia.Windowing"
              x:Class="Redmond.Notepad.Avalonia.SettingsPage"
              Background="Transparent">
 
@@ -51,7 +50,7 @@
           </StackPanel>
         </shared:AnimatedSettingsExpander>
 
-        <windowing:WindowAppearanceSettingsPanel x:Name="WindowAppearancePanel" />
+        <shared:WindowAppearanceSettingsPanel x:Name="WindowAppearancePanel" />
 
         <TextBlock Classes="sectionHeading" Text="Text Formatting" />
         <shared:AnimatedSettingsExpander Header="Font"

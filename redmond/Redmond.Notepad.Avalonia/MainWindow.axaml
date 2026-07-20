@@ -1,7 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="using:Redmond.Notepad.Avalonia"
-        xmlns:windowing="using:Redmond.Avalonia.Windowing"
+        xmlns:shared="using:Redmond.Avalonia.Controls"
         x:Class="Redmond.Notepad.Avalonia.MainWindow"
         Title="Untitled - Notepad"
         Width="900"
@@ -16,6 +16,7 @@
 
   <Window.Resources>
     <SolidColorBrush x:Key="ChromeHoverBrush" Color="#11000000" />
+    <FontFamily x:Key="RedmondFluentIconFont">avares://Redmond.Avalonia.Controls/Assets/RedmondFluentIcons.ttf#Calculator Fluent Icons</FontFamily>
   </Window.Resources>
 
   <Window.Styles>
@@ -40,16 +41,16 @@
           CornerRadius="8"
           ClipToBounds="True">
   <Grid RowDefinitions="42,38,*,27">
-    <Border x:Name="DocumentTitleBar"
-            BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
-            BorderThickness="0,0,0,1"
-            PointerPressed="OnTitleBarPointerPressed">
+    <Grid x:Name="DocumentTitleBar">
+      <shared:WindowDragRegion BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+                               BorderThickness="0,0,0,1" />
       <Grid x:Name="TitleBarContent"
             ColumnDefinitions="Auto,220,Auto,*"
             Margin="8,5,0,0">
         <Image Width="24"
                Height="24"
                Margin="4,0,8,5"
+               IsHitTestVisible="False"
                VerticalAlignment="Center"
                Source="avares://Redmond%20Notepad/Assets/RedmondNotepadIcon.png" />
         <Border Grid.Column="1"
@@ -76,21 +77,12 @@
                 FontSize="20"
                 Content="+"
                 AutomationProperties.Name="New tab" />
-        <Button Grid.Column="3"
-                Classes="chrome"
-                HorizontalAlignment="Right"
-                Padding="12,0"
-                Content="Settings"
-                Click="OnSettingsClick"
-                AutomationProperties.Name="Settings" />
       </Grid>
-    </Border>
+    </Grid>
 
-    <Border x:Name="SettingsTitleBar"
-            IsVisible="False"
-            BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
-            BorderThickness="0,0,0,1"
-            PointerPressed="OnTitleBarPointerPressed">
+    <Grid x:Name="SettingsTitleBar" IsVisible="False">
+      <shared:WindowDragRegion BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+                               BorderThickness="0,0,0,1" />
       <Grid x:Name="SettingsTitleBarContent"
             Height="42"
             ColumnDefinitions="44,Auto,*"
@@ -110,27 +102,44 @@
                Width="20"
                Height="20"
                Margin="0,0,10,0"
+               IsHitTestVisible="False"
                VerticalAlignment="Center"
                Source="avares://Redmond%20Notepad/Assets/RedmondNotepadIcon.png" />
         <TextBlock Grid.Column="2"
+                   IsHitTestVisible="False"
                    VerticalAlignment="Center"
                    FontSize="13"
                    Text="Notepad" />
       </Grid>
-    </Border>
+    </Grid>
 
     <Grid x:Name="DocumentPage"
           Grid.Row="1"
           Grid.RowSpan="3"
           RowDefinitions="38,*,27">
-    <StackPanel Grid.Row="0"
-                Margin="7,3"
-                Orientation="Horizontal"
-                Spacing="1">
-      <Button Classes="chrome" Content="File" />
-      <Button Classes="chrome" Content="Edit" />
-      <Button Classes="chrome" Content="View" />
-    </StackPanel>
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="7,3">
+      <StackPanel Orientation="Horizontal" Spacing="1">
+        <Button Classes="chrome" Content="File" />
+        <Button Classes="chrome" Content="Edit" />
+        <Button Classes="chrome" Content="View" />
+      </StackPanel>
+      <Button Grid.Column="1"
+              Classes="chrome"
+              Width="36"
+              Height="32"
+              Padding="0"
+              HorizontalContentAlignment="Center"
+              VerticalContentAlignment="Center"
+              Click="OnSettingsClick"
+              ToolTip.Tip="Settings"
+              AutomationProperties.Name="Settings">
+        <TextBlock FontFamily="{StaticResource RedmondFluentIconFont}"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   FontSize="17"
+                   Text="&#xE713;" />
+      </Button>
+    </Grid>
 
     <TextBox x:Name="Editor"
              Grid.Row="1"
@@ -178,12 +187,13 @@
                         Grid.RowSpan="3"
                         IsVisible="False" />
 
-    <windowing:WindowCaptionButtons x:Name="CaptionButtons"
-                                    Grid.Row="0"
-                                    HorizontalAlignment="Right"
-                                    VerticalAlignment="Top" />
+    <shared:WindowCaptionButtons x:Name="CaptionButtons"
+                                 Grid.Row="0"
+                                 ZIndex="2"
+                                 HorizontalAlignment="Right"
+                                 VerticalAlignment="Top" />
   </Grid>
   </Border>
-  <windowing:WindowResizeHandles x:Name="ResizeHandles" />
+  <shared:WindowResizeHandles x:Name="ResizeHandles" />
   </Grid>
 </Window>

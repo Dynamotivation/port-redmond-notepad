@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Redmond.Avalonia.Windowing;
+using Redmond.Avalonia.Controls;
 
 namespace Redmond.Notepad.Avalonia;
 
@@ -14,10 +14,28 @@ internal static class NotepadSettingsStore
     {
         try
         {
-            return File.Exists(SettingsPath)
-                ? JsonSerializer.Deserialize<WindowAppearanceOptions>(File.ReadAllText(SettingsPath))
-                    ?? new WindowAppearanceOptions()
-                : new WindowAppearanceOptions();
+            if (!File.Exists(SettingsPath))
+            {
+                return new WindowAppearanceOptions();
+            }
+
+            var json = File.ReadAllText(SettingsPath);
+            var options = JsonSerializer.Deserialize<WindowAppearanceOptions>(json)
+                ?? new WindowAppearanceOptions();
+            using var document = JsonDocument.Parse(json);
+            if (!document.RootElement.TryGetProperty(nameof(WindowAppearanceOptions.BackgroundMode), out _)
+                && document.RootElement.TryGetProperty("UseSystemBackdrop", out var legacyBackdrop)
+                && legacyBackdrop.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            {
+                options = options with
+                {
+                    BackgroundMode = legacyBackdrop.GetBoolean()
+                        ? TranslucentBackgroundMode.WhenSelected
+                        : TranslucentBackgroundMode.Never,
+                };
+            }
+
+            return options;
         }
         catch (IOException)
         {

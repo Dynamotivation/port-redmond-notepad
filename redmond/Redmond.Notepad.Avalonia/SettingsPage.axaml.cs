@@ -1,5 +1,5 @@
 using Avalonia.Controls;
-using Redmond.Avalonia.Windowing;
+using Redmond.Avalonia.Controls;
 
 namespace Redmond.Notepad.Avalonia;
 

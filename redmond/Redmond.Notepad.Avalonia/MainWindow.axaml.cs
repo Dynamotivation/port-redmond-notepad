@@ -4,7 +4,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Styling;
-using Avalonia.VisualTree;
+using Redmond.Avalonia.Controls;
 using Redmond.Avalonia.Windowing;
 using Redmond.Notepad.Core;
 
@@ -40,6 +40,7 @@ public partial class MainWindow : Window
         DocumentPage.IsVisible = false;
         SettingsTitleBar.IsVisible = true;
         SettingsPage.IsVisible = true;
+        UpdateWindowPresentation();
     }
 
     private void OnBackFromSettingsClick(object? sender, RoutedEventArgs e)
@@ -48,6 +49,7 @@ public partial class MainWindow : Window
         SettingsPage.IsVisible = false;
         DocumentTitleBar.IsVisible = true;
         DocumentPage.IsVisible = true;
+        UpdateWindowPresentation();
         Editor.Focus();
     }
 
@@ -75,25 +77,9 @@ public partial class MainWindow : Window
 
         var dark = ActualThemeVariant == ThemeVariant.Dark;
         WindowSurface.Background = new SolidColorBrush(Color.Parse(
-            _appearance.UseSystemBackdrop
+            _appearanceController.IsBackdropActive
                 ? dark ? "#18383D40" : "#18F3F3F3"
                 : dark ? "#202027" : "#F3F3F3"));
-    }
-
-    private void OnTitleBarPointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        for (var visual = e.Source as Visual; visual is not null; visual = visual.GetVisualParent())
-        {
-            if (visual is Button)
-            {
-                return;
-            }
-        }
-
-        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-        {
-            BeginMoveDrag(e);
-        }
     }
 
     private void OnEditorTextChanged(object? sender, TextChangedEventArgs e)
