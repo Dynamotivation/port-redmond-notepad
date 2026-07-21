@@ -52,6 +52,17 @@
     <Style Selector="Button.chrome:pointerover">
       <Setter Property="Background" Value="{DynamicResource ChromeHoverBrush}" />
     </Style>
+    <Style Selector="RepeatButton.chrome">
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+    <Style Selector="RepeatButton.chrome:pointerover">
+      <Setter Property="Background" Value="{DynamicResource ChromeHoverBrush}" />
+    </Style>
     <Style Selector="ListBox.tabStrip">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
@@ -168,79 +179,123 @@
                IsHitTestVisible="False"
                VerticalAlignment="Center"
                Source="avares://Redmond%20Notepad/Assets/RedmondNotepadIcon.png" />
-        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Left">
-          <ListBox x:Name="TabsList"
-                   Classes="tabStrip"
-                   MaxWidth="610"
-                   Height="37"
-                   SelectionMode="Single"
-                   SelectionChanged="OnTabSelectionChanged"
-                   ScrollViewer.HorizontalScrollBarVisibility="Hidden"
-                   ScrollViewer.VerticalScrollBarVisibility="Disabled">
-            <ListBox.ItemsPanel>
-              <ItemsPanelTemplate>
-                <StackPanel Orientation="Horizontal" />
-              </ItemsPanelTemplate>
-            </ListBox.ItemsPanel>
-            <ListBox.ItemTemplate>
-              <DataTemplate x:CompileBindings="False">
-                <Grid Width="210" Height="37" ColumnDefinitions="*,34">
-                  <TextBlock Margin="12,0,4,0"
-                             VerticalAlignment="Center"
-                             TextTrimming="CharacterEllipsis"
-                             Text="{Binding Title}" />
-                  <Button Grid.Column="1"
-                          Classes="chrome"
-                          Width="28"
-                          Height="28"
-                          Padding="0"
-                          HorizontalContentAlignment="Center"
-                          VerticalContentAlignment="Center"
-                          CommandParameter="{Binding}"
-                          Click="OnCloseTabClick"
-                          AutomationProperties.Name="Close tab">
-                    <Path Width="10"
-                          Height="10"
-                          Stretch="Uniform"
-                          Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
-                          StrokeThickness="1.4"
-                          StrokeLineCap="Round"
-                          Data="M 1,1 L 9,9 M 9,1 L 1,9" />
-                  </Button>
-                  <Border Grid.ColumnSpan="2"
-                          Width="1"
-                          Height="22.2"
-                          HorizontalAlignment="Left"
-                          VerticalAlignment="Center"
-                          IsHitTestVisible="False"
-                          IsVisible="{Binding ShowLeadingSeparator}"
-                          Opacity="0.6"
-                          Background="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
-                </Grid>
-              </DataTemplate>
-            </ListBox.ItemTemplate>
-          </ListBox>
-          <Grid Width="37" Height="37">
-            <Button Classes="chrome"
-                    Width="28"
-                    Height="28"
-                    Padding="0"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    HorizontalContentAlignment="Center"
-                    VerticalContentAlignment="Center"
-                    Click="OnNewTabClick"
-                    AutomationProperties.Name="New tab">
-              <Path Width="12"
-                    Height="12"
-                    Stretch="Uniform"
-                    Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
-                    StrokeThickness="1.4"
-                    StrokeLineCap="Round"
-                    Data="M 6,0 L 6,12 M 0,6 L 12,6" />
-            </Button>
-          </Grid>
-        </StackPanel>
+        <Grid Grid.Column="1" ColumnDefinitions="Auto,*,Auto">
+          <RepeatButton x:Name="TabScrollLeftButton"
+                        Classes="chrome"
+                        Width="28"
+                        Height="28"
+                        HorizontalContentAlignment="Center"
+                        VerticalContentAlignment="Center"
+                        IsVisible="False"
+                        Delay="280"
+                        Interval="16"
+                        Click="OnTabScrollLeftClick"
+                        AutomationProperties.Name="Scroll tabs left">
+            <Path Width="8" Height="12" Stretch="Fill"
+                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RepeatButton}}"
+                  StrokeThickness="1.4" StrokeLineCap="Round"
+                  Data="M 7,1 L 2,6 L 7,11" />
+          </RepeatButton>
+
+          <ScrollViewer x:Name="TabScrollViewer"
+                        Grid.Column="1"
+                        Height="37"
+                        HorizontalScrollBarVisibility="Hidden"
+                        VerticalScrollBarVisibility="Disabled"
+                        IsScrollChainingEnabled="False"
+                        ScrollChanged="OnTabScrollChanged">
+            <StackPanel Orientation="Horizontal">
+              <ListBox x:Name="TabsList"
+                       Classes="tabStrip"
+                       Height="37"
+                       HorizontalAlignment="Left"
+                       SelectionMode="Single"
+                       SelectionChanged="OnTabSelectionChanged">
+                <ListBox.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" />
+                  </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:CompileBindings="False">
+                    <Grid Width="210" Height="37" ColumnDefinitions="*,34">
+                      <TextBlock Margin="12,0,4,0"
+                                 VerticalAlignment="Center"
+                                 TextTrimming="CharacterEllipsis"
+                                 Text="{Binding Title}" />
+                      <Button Grid.Column="1"
+                              Classes="chrome"
+                              Width="28"
+                              Height="28"
+                              Padding="0"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center"
+                              CommandParameter="{Binding}"
+                              Click="OnCloseTabClick"
+                              AutomationProperties.Name="Close tab">
+                        <Path Width="10"
+                              Height="10"
+                              Stretch="Uniform"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.4"
+                              StrokeLineCap="Round"
+                              Data="M 1,1 L 9,9 M 9,1 L 1,9" />
+                      </Button>
+                      <Border Grid.ColumnSpan="2"
+                              Width="1"
+                              Height="22.2"
+                              HorizontalAlignment="Left"
+                              VerticalAlignment="Center"
+                              IsHitTestVisible="False"
+                              IsVisible="{Binding ShowLeadingSeparator}"
+                              Opacity="0.6"
+                              Background="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+
+              <Grid Width="37" Height="37">
+                <Button Classes="chrome"
+                        Width="28"
+                        Height="28"
+                        Padding="0"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        HorizontalContentAlignment="Center"
+                        VerticalContentAlignment="Center"
+                        Click="OnNewTabClick"
+                        AutomationProperties.Name="New tab">
+                  <Path Width="12"
+                        Height="12"
+                        Stretch="Uniform"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                        StrokeThickness="1.4"
+                        StrokeLineCap="Round"
+                        Data="M 6,0 L 6,12 M 0,6 L 12,6" />
+                </Button>
+              </Grid>
+            </StackPanel>
+          </ScrollViewer>
+
+          <RepeatButton x:Name="TabScrollRightButton"
+                        Grid.Column="2"
+                        Classes="chrome"
+                        Width="28"
+                        Height="28"
+                        HorizontalContentAlignment="Center"
+                        VerticalContentAlignment="Center"
+                        IsVisible="False"
+                        Delay="280"
+                        Interval="16"
+                        Click="OnTabScrollRightClick"
+                        AutomationProperties.Name="Scroll tabs right">
+            <Path Width="8" Height="12" Stretch="Fill"
+                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RepeatButton}}"
+                  StrokeThickness="1.4" StrokeLineCap="Round"
+                  Data="M 1,1 L 6,6 L 1,11" />
+          </RepeatButton>
+        </Grid>
       </Grid>
     </Grid>
 

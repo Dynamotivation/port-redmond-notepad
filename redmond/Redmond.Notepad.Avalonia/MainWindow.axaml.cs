@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using Redmond.Avalonia.Controls;
@@ -14,12 +15,17 @@ namespace Redmond.Notepad.Avalonia;
 
 public partial class MainWindow : Window
 {
+    private const double TabWidth = 210;
+    private const double TabScrollStep = 8;
+    private const double TabScrollButtonWidth = 28;
+
     private readonly NotepadWorkspace _workspace = new();
     private readonly ObservableCollection<NotepadTabItem> _tabs = [];
     private readonly WindowAppearanceController _appearanceController;
     private WindowAppearanceOptions _appearance;
     private AppThemePreference _themePreference;
     private bool _isLoadingTab;
+    private bool _isUpdatingTabScrollButtons;
 
     public MainWindow()
     {
@@ -48,7 +54,11 @@ public partial class MainWindow : Window
         RefreshDocumentStatus();
     }
 
-    private void OnOpened(object? sender, EventArgs e) => Editor.Focus();
+    private void OnOpened(object? sender, EventArgs e)
+    {
+        Editor.Focus();
+        ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
+    }
 
     private void OnSettingsClick(object? sender, RoutedEventArgs e)
     {
@@ -103,6 +113,7 @@ public partial class MainWindow : Window
         TabsList.SelectedItem = item;
         RefreshTabSeparators();
         LoadSelectedTab();
+        ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
     }
 
     private void OnCloseTabClick(object? sender, RoutedEventArgs e)
@@ -125,6 +136,7 @@ public partial class MainWindow : Window
         TabsList.SelectedItem = replacementItem;
         RefreshTabSeparators();
         LoadSelectedTab();
+        ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
         e.Handled = true;
     }
 
@@ -138,6 +150,105 @@ public partial class MainWindow : Window
         _workspace.SelectTab(item.Tab);
         RefreshTabSeparators();
         LoadSelectedTab();
+        ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
+    }
+
+    private void OnTabScrollLeftClick(object? sender, RoutedEventArgs e)
+    {
+        ScrollTabsBy(-TabScrollStep);
+    }
+
+    private void OnTabScrollRightClick(object? sender, RoutedEventArgs e)
+    {
+        ScrollTabsBy(TabScrollStep);
+    }
+
+    private void OnTabScrollChanged(object? sender, ScrollChangedEventArgs e)
+    {
+        UpdateTabScrollButtons();
+    }
+
+    private void ScrollTabsBy(double delta)
+    {
+        var maximumOffset = Math.Max(0, TabScrollViewer.Extent.Width - TabScrollViewer.Viewport.Width);
+        var offset = Math.Clamp(TabScrollViewer.Offset.X + delta, 0, maximumOffset);
+        TabScrollViewer.Offset = new Vector(offset, 0);
+        UpdateTabScrollButtons();
+    }
+
+    private void ScheduleTabViewportUpdate(bool ensureSelectedTabIsVisible = false)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            UpdateTabScrollButtons();
+            if (ensureSelectedTabIsVisible)
+            {
+                EnsureSelectedTabVisible();
+            }
+        }, DispatcherPriority.Loaded);
+    }
+
+    private void UpdateTabScrollButtons()
+    {
+        if (_isUpdatingTabScrollButtons)
+        {
+            return;
+        }
+
+        var widthReservedByVisibleButtons = TabScrollLeftButton.IsVisible
+            ? TabScrollButtonWidth * 2
+            : 0;
+        var availableWidthWithoutButtons = TabScrollViewer.Viewport.Width + widthReservedByVisibleButtons;
+        var hasOverflow = TabScrollViewer.Extent.Width > availableWidthWithoutButtons + 0.5;
+
+        if (TabScrollLeftButton.IsVisible != hasOverflow)
+        {
+            _isUpdatingTabScrollButtons = true;
+            TabScrollLeftButton.IsVisible = hasOverflow;
+            TabScrollRightButton.IsVisible = hasOverflow;
+            if (!hasOverflow)
+            {
+                TabScrollViewer.Offset = default;
+            }
+            _isUpdatingTabScrollButtons = false;
+            ScheduleTabViewportUpdate();
+            return;
+        }
+
+        var maximumOffset = Math.Max(0, TabScrollViewer.Extent.Width - TabScrollViewer.Viewport.Width);
+        TabScrollLeftButton.IsEnabled = hasOverflow && TabScrollViewer.Offset.X > 0.5;
+        TabScrollRightButton.IsEnabled = hasOverflow && TabScrollViewer.Offset.X < maximumOffset - 0.5;
+    }
+
+    private void EnsureSelectedTabVisible()
+    {
+        if (TabsList.SelectedItem is not NotepadTabItem selectedItem)
+        {
+            return;
+        }
+
+        var selectedIndex = _tabs.IndexOf(selectedItem);
+        if (selectedIndex < 0 || TabScrollViewer.Viewport.Width <= 0)
+        {
+            return;
+        }
+
+        var tabStart = selectedIndex * TabWidth;
+        var tabEnd = tabStart + TabWidth;
+        var offset = TabScrollViewer.Offset.X;
+
+        if (tabStart < offset)
+        {
+            offset = tabStart;
+        }
+        else if (tabEnd > offset + TabScrollViewer.Viewport.Width)
+        {
+            offset = tabEnd - TabScrollViewer.Viewport.Width;
+        }
+
+        var maximumOffset = Math.Max(0, TabScrollViewer.Extent.Width - TabScrollViewer.Viewport.Width);
+        TabScrollViewer.Offset = new Vector(Math.Clamp(offset, 0, maximumOffset), 0);
+        UpdateTabScrollButtons();
     }
 
     private void RefreshTabSeparators()
@@ -149,8 +260,7 @@ public partial class MainWindow : Window
         for (var index = 0; index < _tabs.Count; index++)
         {
             _tabs[index].ShowLeadingSeparator = index > 0
-                && index != selectedIndex
-                && index - 1 != selectedIndex;
+                && index != selectedIndex;
         }
     }
 
