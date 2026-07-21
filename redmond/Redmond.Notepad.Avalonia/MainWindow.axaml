@@ -68,7 +68,7 @@
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="Padding" Value="0,0,16,0" />
-      <Setter Property="Margin" Value="-8,0,-8,0" />
+      <Setter Property="Margin" Value="0,0,-8,0" />
       <Setter Property="ZIndex" Value="1" />
       <Setter Property="Template">
         <ControlTemplate>
@@ -166,20 +166,25 @@
           BorderThickness="1"
           CornerRadius="8"
           ClipToBounds="True">
-  <Grid RowDefinitions="42,38,*,27">
+  <Grid RowDefinitions="Auto,38,*,27">
     <Grid x:Name="DocumentTitleBar"
+          Height="48"
           Background="{DynamicResource NotepadTitleBarBrush}">
       <shared:WindowDragRegion />
       <Grid x:Name="TitleBarContent"
+            Height="37"
+            VerticalAlignment="Bottom"
             ColumnDefinitions="Auto,*"
-            Margin="8,5,0,0">
-        <Image Width="18"
-               Height="18"
-               Margin="6,0,10,5"
-               Stretch="Uniform"
-               IsHitTestVisible="False"
-               VerticalAlignment="Center"
-               Source="avares://Redmond%20Notepad/Assets/RedmondNotepadIcon.png" />
+            Margin="8,0,0,0">
+        <Grid Width="37" Height="37">
+          <Image Width="22"
+                 Height="22"
+                 Stretch="Uniform"
+                 IsHitTestVisible="False"
+                 HorizontalAlignment="Center"
+                 VerticalAlignment="Center"
+                 Source="avares://Redmond%20Notepad/Assets/RedmondNotepadIcon.png" />
+        </Grid>
         <Grid Grid.Column="1" ColumnDefinitions="Auto,*,Auto">
           <RepeatButton x:Name="TabScrollLeftButton"
                         Classes="chrome"
@@ -252,6 +257,15 @@
                               IsVisible="{Binding ShowLeadingSeparator}"
                               Opacity="0.6"
                               Background="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                      <Border Grid.ColumnSpan="2"
+                              Width="1"
+                              Height="22.2"
+                              HorizontalAlignment="Right"
+                              VerticalAlignment="Center"
+                              IsHitTestVisible="False"
+                              IsVisible="{Binding ShowTrailingSeparator}"
+                              Opacity="0.6"
+                              Background="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
                     </Grid>
                   </DataTemplate>
                 </ListBox.ItemTemplate>
@@ -301,7 +315,7 @@
       </Grid>
     </Grid>
 
-    <Grid x:Name="SettingsTitleBar" IsVisible="False">
+    <Grid x:Name="SettingsTitleBar" Height="42" IsVisible="False">
       <shared:WindowDragRegion BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
                                BorderThickness="0,0,0,1" />
       <Grid x:Name="SettingsTitleBarContent"

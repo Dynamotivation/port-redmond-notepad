@@ -262,6 +262,8 @@ public partial class MainWindow : Window
             _tabs[index].ShowLeadingSeparator = index > 0
                 && index != selectedIndex
                 && index - 1 != selectedIndex;
+            _tabs[index].ShowTrailingSeparator = index == _tabs.Count - 1
+                && index != selectedIndex;
         }
     }
 
@@ -357,6 +359,7 @@ public partial class MainWindow : Window
 internal sealed class NotepadTabItem(NotepadTab tab) : INotifyPropertyChanged
 {
     private bool _showLeadingSeparator;
+    private bool _showTrailingSeparator;
 
     public NotepadTab Tab { get; } = tab;
 
@@ -374,6 +377,21 @@ internal sealed class NotepadTabItem(NotepadTab tab) : INotifyPropertyChanged
 
             _showLeadingSeparator = value;
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowLeadingSeparator)));
+        }
+    }
+
+    public bool ShowTrailingSeparator
+    {
+        get => _showTrailingSeparator;
+        set
+        {
+            if (_showTrailingSeparator == value)
+            {
+                return;
+            }
+
+            _showTrailingSeparator = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowTrailingSeparator)));
         }
     }
 
