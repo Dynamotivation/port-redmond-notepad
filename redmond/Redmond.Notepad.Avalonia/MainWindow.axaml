@@ -10,6 +10,7 @@
         MinHeight="320"
         WindowStartupLocation="CenterScreen"
         WindowDecorations="None"
+        Icon="avares://Redmond%20Notepad/Assets/RedmondNotepadIcon.png"
         Background="Transparent"
         TransparencyLevelHint="Transparent"
         TransparencyBackgroundFallback="#F3F3F3">
@@ -176,6 +177,7 @@
         <Image Width="18"
                Height="18"
                Margin="6,0,10,5"
+               Stretch="Uniform"
                IsHitTestVisible="False"
                VerticalAlignment="Center"
                Source="avares://Redmond%20Notepad/Assets/RedmondNotepadIcon.png" />
@@ -321,6 +323,7 @@
                Width="20"
                Height="20"
                Margin="0,0,10,0"
+               Stretch="Uniform"
                IsHitTestVisible="False"
                VerticalAlignment="Center"
                Source="avares://Redmond%20Notepad/Assets/RedmondNotepadIcon.png" />
