@@ -169,8 +169,7 @@
   <Grid RowDefinitions="42,38,*,27">
     <Grid x:Name="DocumentTitleBar"
           Background="{DynamicResource NotepadTitleBarBrush}">
-      <shared:WindowDragRegion BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
-                               BorderThickness="0,0,0,1" />
+      <shared:WindowDragRegion />
       <Grid x:Name="TitleBarContent"
             ColumnDefinitions="Auto,*"
             Margin="8,5,0,0">
@@ -202,6 +201,7 @@
           <ScrollViewer x:Name="TabScrollViewer"
                         Grid.Column="1"
                         Height="37"
+                        HorizontalAlignment="Left"
                         HorizontalScrollBarVisibility="Hidden"
                         VerticalScrollBarVisibility="Disabled"
                         IsScrollChainingEnabled="False"

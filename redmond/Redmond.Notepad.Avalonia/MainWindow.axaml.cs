@@ -260,7 +260,8 @@ public partial class MainWindow : Window
         for (var index = 0; index < _tabs.Count; index++)
         {
             _tabs[index].ShowLeadingSeparator = index > 0
-                && index != selectedIndex;
+                && index != selectedIndex
+                && index - 1 != selectedIndex;
         }
     }
 
