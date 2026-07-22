@@ -40,6 +40,7 @@ try
         "one\r\ntwo\nthree",
         "one\rtwo\rthree",
         expectedPreamble: [0xFE, 0xFF]);
+    await VerifyExternalChangeProtectionAsync(store, verificationDirectory);
 
     VerifyUntitledPreview();
     VerifyShortcutConventions();
@@ -89,6 +90,76 @@ static void VerifyShortcutConventions()
         "Notepad shortcut catalogs must not contain duplicate active gestures");
     Assert(macOS.ValidateConventions().All(issue => issue.Severity != ShortcutConventionSeverity.Error),
         "macOS shortcut catalog must avoid reserved or conflicting system gestures");
+}
+
+static async Task VerifyExternalChangeProtectionAsync(
+    ITextFileStore store,
+    string directory)
+{
+    var path = Path.Combine(directory, "external-change.txt");
+    var originalBytes = Encoding.UTF8.GetBytes("original-A");
+    var externalBytes = Encoding.UTF8.GetBytes("external-A");
+    Assert(originalBytes.Length == externalBytes.Length,
+        "external-change fixture must preserve length");
+    await File.WriteAllBytesAsync(path, originalBytes);
+
+    var file = new DocumentFileReference(path);
+    var document = new NotepadDocument(new StringTextBuffer());
+    await document.LoadAsync(store, file);
+    var originalTimestamp = File.GetLastWriteTimeUtc(path);
+    document.Buffer.Text = "local-version";
+
+    await File.WriteAllBytesAsync(path, externalBytes);
+    File.SetLastWriteTimeUtc(path, originalTimestamp);
+    Assert(
+        await document.CheckForExternalChangesAsync(store) == ExternalFileChange.Modified,
+        "SHA-256 comparison must detect same-length changes even when the timestamp is restored");
+
+    var conflictThrown = false;
+    try
+    {
+        await document.SaveAsync(store);
+    }
+    catch (FileChangedExternallyException exception)
+    {
+        conflictThrown = exception.Change == ExternalFileChange.Modified;
+    }
+
+    Assert(conflictThrown, "normal save must reject an externally modified file");
+    Assert((await File.ReadAllBytesAsync(path)).SequenceEqual(externalBytes),
+        "rejected save must leave the external version untouched");
+
+    await document.SaveAsync(store, overwriteExternalChanges: true);
+    Assert(!document.IsModified, "explicit overwrite must save and mark the buffer original");
+    Assert(Encoding.UTF8.GetString(await File.ReadAllBytesAsync(path)) == "local-version",
+        "explicit overwrite must preserve the editor version");
+
+    document.Buffer.Text = "recreated-version";
+    File.Delete(path);
+    Assert(
+        await document.CheckForExternalChangesAsync(store) == ExternalFileChange.Deleted,
+        "deleted files must be distinguished from modified files");
+
+    conflictThrown = false;
+    try
+    {
+        await document.SaveAsync(store);
+    }
+    catch (FileChangedExternallyException exception)
+    {
+        conflictThrown = exception.Change == ExternalFileChange.Deleted;
+    }
+
+    Assert(conflictThrown, "normal save must not silently recreate a deleted file");
+    Assert(!File.Exists(path), "rejected save must leave the deleted path absent");
+    await document.SaveAsync(store, overwriteExternalChanges: true);
+    Assert(File.Exists(path), "explicit recreate must restore a deleted file");
+
+    var timestampBeforeTouch = File.GetLastWriteTimeUtc(path);
+    File.SetLastWriteTimeUtc(path, timestampBeforeTouch.AddSeconds(2));
+    Assert(
+        await document.CheckForExternalChangesAsync(store) == ExternalFileChange.None,
+        "timestamp-only touches must not produce false content conflicts");
 }
 
 static async Task VerifyRoundTripAsync(

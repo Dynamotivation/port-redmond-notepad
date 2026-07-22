@@ -36,8 +36,11 @@ public partial class MainWindow : Window
     private bool _isUpdatingTabScrollButtons;
     private bool _allowWindowClose;
     private bool _isHandlingWindowClose;
+    private bool _suppressExternalChangeCheck;
     private INotepadFilePicker? _filePicker;
     private TaskCompletionSource<UnsavedChangesDecision>? _unsavedChangesDecision;
+    private TaskCompletionSource<ExternalChangesDecision>? _externalChangesDecision;
+    private CancellationTokenSource? _externalChangeCheckCancellation;
 
     public MainWindow() : this([])
     {
@@ -244,6 +247,7 @@ public partial class MainWindow : Window
     {
         foreach (var item in _tabs.Where(candidate => candidate.Tab.Document.IsModified).ToArray())
         {
+            SelectTabWithoutExternalChangeCheck(item);
             if (!await SaveDocumentAsync(item, forcePicker: false))
             {
                 break;
@@ -278,20 +282,63 @@ public partial class MainWindow : Window
         try
         {
             await document.SaveAsync(_fileStore, destination);
-            item.RefreshTitle();
-
-            if (ReferenceEquals(item.Tab, _workspace.SelectedTab))
-            {
-                UpdateDocumentTitle();
-                RefreshDocumentStatus();
-            }
+            RefreshSavedDocument(item);
             return true;
+        }
+        catch (FileChangedExternallyException exception)
+        {
+            var decision = await AskAboutExternalChangesAsync(document, exception.Change);
+            if (decision == ExternalChangesDecision.Cancel)
+            {
+                DocumentSummary.Text = $"Save cancelled. {destination.DisplayName} was not changed.";
+                return false;
+            }
+
+            try
+            {
+                if (decision == ExternalChangesDecision.Reload)
+                {
+                    await document.LoadAsync(_fileStore, destination);
+                }
+                else
+                {
+                    await document.SaveAsync(
+                        _fileStore,
+                        destination,
+                        overwriteExternalChanges: true);
+                }
+
+                RefreshSavedDocument(item);
+                return true;
+            }
+            catch (Exception resolutionException) when (
+                resolutionException is IOException
+                    or UnauthorizedAccessException
+                    or DecoderFallbackException
+                    or EncoderFallbackException)
+            {
+                DocumentSummary.Text = $"Could not resolve changes to {destination.DisplayName}: {resolutionException.Message}";
+                return false;
+            }
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or EncoderFallbackException)
         {
             DocumentSummary.Text = $"Could not save {destination.DisplayName}: {exception.Message}";
             return false;
         }
+    }
+
+    private void RefreshSavedDocument(NotepadTabItem item)
+    {
+        item.RefreshTitle();
+        if (!ReferenceEquals(item.Tab, _workspace.SelectedTab))
+        {
+            return;
+        }
+
+        LoadSelectedTab();
+        UpdateDocumentTitle();
+        RefreshDocumentStatus();
     }
 
     private async void OnCloseTabClick(object? sender, RoutedEventArgs e)
@@ -317,7 +364,7 @@ public partial class MainWindow : Window
     {
         if (item.Tab.Document.IsModified)
         {
-            TabsList.SelectedItem = item;
+            SelectTabWithoutExternalChangeCheck(item);
             var decision = await AskToSaveChangesAsync(item.Tab.Document);
             if (decision == UnsavedChangesDecision.Cancel
                 || decision == UnsavedChangesDecision.Save
@@ -379,6 +426,7 @@ public partial class MainWindow : Window
     private async void OnNotepadKeyDown(object? sender, KeyEventArgs e)
     {
         if (UnsavedChangesOverlay.IsVisible
+            || ExternalChangesOverlay.IsVisible
             || SettingsPage.IsVisible
             || !AvaloniaShortcutAdapter.TryCreateInput(e, out var input))
         {
@@ -429,6 +477,9 @@ public partial class MainWindow : Window
 
     private void OnWindowClosed(object? sender, EventArgs e)
     {
+        _externalChangeCheckCancellation?.Cancel();
+        _externalChangeCheckCancellation?.Dispose();
+        _externalChangesDecision?.TrySetResult(ExternalChangesDecision.Cancel);
         RemoveHandler(KeyDownEvent, OnNotepadKeyDown);
         foreach (var registration in _shortcutRegistrations)
         {
@@ -476,7 +527,7 @@ public partial class MainWindow : Window
         _isHandlingWindowClose = true;
         foreach (var item in modifiedTabs)
         {
-            TabsList.SelectedItem = item;
+            SelectTabWithoutExternalChangeCheck(item);
             var decision = await AskToSaveChangesAsync(item.Tab.Document);
             if (decision == UnsavedChangesDecision.Cancel
                 || decision == UnsavedChangesDecision.Save
@@ -489,6 +540,19 @@ public partial class MainWindow : Window
 
         _allowWindowClose = true;
         Close();
+    }
+
+    private void SelectTabWithoutExternalChangeCheck(NotepadTabItem item)
+    {
+        _suppressExternalChangeCheck = true;
+        try
+        {
+            TabsList.SelectedItem = item;
+        }
+        finally
+        {
+            _suppressExternalChangeCheck = false;
+        }
     }
 
     private Task<UnsavedChangesDecision> AskToSaveChangesAsync(NotepadDocument document)
@@ -523,7 +587,7 @@ public partial class MainWindow : Window
         completion?.TrySetResult(decision);
     }
 
-    private void OnTabSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    private async void OnTabSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (TabsList.SelectedItem is not NotepadTabItem item || ReferenceEquals(item.Tab, _workspace.SelectedTab))
         {
@@ -534,6 +598,120 @@ public partial class MainWindow : Window
         RefreshTabSeparators();
         LoadSelectedTab();
         ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
+
+        if (!_suppressExternalChangeCheck
+            && !_isHandlingWindowClose
+            && _unsavedChangesDecision is null)
+        {
+            await CheckSelectedDocumentForExternalChangesAsync(item);
+        }
+    }
+
+    private async Task CheckSelectedDocumentForExternalChangesAsync(NotepadTabItem item)
+    {
+        _externalChangeCheckCancellation?.Cancel();
+        _externalChangeCheckCancellation?.Dispose();
+        _externalChangeCheckCancellation = new CancellationTokenSource();
+        var cancellationToken = _externalChangeCheckCancellation.Token;
+        var document = item.Tab.Document;
+
+        try
+        {
+            var change = await document.CheckForExternalChangesAsync(_fileStore, cancellationToken);
+            if (change == ExternalFileChange.None
+                || cancellationToken.IsCancellationRequested
+                || !ReferenceEquals(item.Tab, _workspace.SelectedTab))
+            {
+                return;
+            }
+
+            if (change == ExternalFileChange.Modified && !document.IsModified)
+            {
+                await document.LoadAsync(_fileStore, document.File!, cancellationToken: cancellationToken);
+                RefreshSavedDocument(item);
+                DocumentSummary.Text = $"Reloaded {document.DisplayName} because it changed on disk.";
+                return;
+            }
+
+            var decision = await AskAboutExternalChangesAsync(document, change);
+            if (decision == ExternalChangesDecision.Reload)
+            {
+                await document.LoadAsync(_fileStore, document.File!, cancellationToken: cancellationToken);
+                RefreshSavedDocument(item);
+                return;
+            }
+
+            if (decision == ExternalChangesDecision.Overwrite)
+            {
+                await document.SaveAsync(
+                    _fileStore,
+                    document.File,
+                    overwriteExternalChanges: true,
+                    cancellationToken: cancellationToken);
+                RefreshSavedDocument(item);
+                return;
+            }
+
+            DocumentSummary.Text = change == ExternalFileChange.Deleted
+                ? $"{document.DisplayName} no longer exists on disk; your editor copy is unchanged."
+                : $"{document.DisplayName} differs from disk; your editor copy is unchanged.";
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception) when (
+            exception is IOException
+                or UnauthorizedAccessException
+                or DecoderFallbackException
+                or EncoderFallbackException)
+        {
+            DocumentSummary.Text = $"Could not check {document.DisplayName}: {exception.Message}";
+        }
+    }
+
+    private Task<ExternalChangesDecision> AskAboutExternalChangesAsync(
+        NotepadDocument document,
+        ExternalFileChange change)
+    {
+        if (_externalChangesDecision is not null)
+        {
+            return _externalChangesDecision.Task;
+        }
+
+        var wasDeleted = change == ExternalFileChange.Deleted;
+        ExternalChangesTitle.Text = wasDeleted
+            ? "File deleted or moved"
+            : "File changed outside Redmond Notepad";
+        ExternalChangesMessage.Text = wasDeleted
+            ? $"{document.DisplayName} no longer exists at its original location. You can recreate it from your editor copy or cancel and keep working without changing the disk."
+            : $"{document.DisplayName} changed on disk after this tab opened. Choose which version to keep.";
+        ExternalChangesWarning.Text = wasDeleted
+            ? "Recreate file writes your editor copy back to the original location."
+            : "Reload discards your edits. Overwrite permanently replaces the other version.";
+        ReloadExternalChangesButton.IsVisible = !wasDeleted;
+        OverwriteExternalChangesButton.Content = wasDeleted ? "Recreate file" : "Overwrite";
+        ExternalChangesOverlay.IsVisible = true;
+        (wasDeleted ? OverwriteExternalChangesButton : ReloadExternalChangesButton).Focus();
+        _externalChangesDecision = new TaskCompletionSource<ExternalChangesDecision>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        return _externalChangesDecision.Task;
+    }
+
+    private void OnReloadExternalChangesClick(object? sender, RoutedEventArgs e) =>
+        ResolveExternalChanges(ExternalChangesDecision.Reload);
+
+    private void OnOverwriteExternalChangesClick(object? sender, RoutedEventArgs e) =>
+        ResolveExternalChanges(ExternalChangesDecision.Overwrite);
+
+    private void OnCancelExternalChangesClick(object? sender, RoutedEventArgs e) =>
+        ResolveExternalChanges(ExternalChangesDecision.Cancel);
+
+    private void ResolveExternalChanges(ExternalChangesDecision decision)
+    {
+        var completion = _externalChangesDecision;
+        _externalChangesDecision = null;
+        ExternalChangesOverlay.IsVisible = false;
+        completion?.TrySetResult(decision);
     }
 
     private void OnTabScrollLeftClick(object? sender, RoutedEventArgs e)
@@ -792,5 +970,12 @@ internal enum UnsavedChangesDecision
 {
     Save,
     Discard,
+    Cancel,
+}
+
+internal enum ExternalChangesDecision
+{
+    Reload,
+    Overwrite,
     Cancel,
 }

@@ -479,5 +479,45 @@
       </StackPanel>
     </Border>
   </Border>
+
+  <Border x:Name="ExternalChangesOverlay"
+          ZIndex="21"
+          IsVisible="False"
+          Background="#66000000">
+    <Border Width="520"
+            Padding="24"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Background="{DynamicResource NotepadEditorBrush}"
+            BorderBrush="{DynamicResource NotepadDividerBrush}"
+            BorderThickness="1"
+            CornerRadius="8">
+      <StackPanel Spacing="14">
+        <TextBlock x:Name="ExternalChangesTitle"
+                   FontSize="20"
+                   FontWeight="SemiBold"
+                   Text="File changed outside Redmond Notepad" />
+        <TextBlock x:Name="ExternalChangesMessage"
+                   TextWrapping="Wrap" />
+        <TextBlock x:Name="ExternalChangesWarning"
+                   Opacity="0.72"
+                   Text="Reload discards your edits. Overwrite permanently replaces the other version."
+                   TextWrapping="Wrap" />
+        <StackPanel Margin="0,8,0,0"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Spacing="8">
+          <Button Content="Cancel"
+                  Click="OnCancelExternalChangesClick" />
+          <Button x:Name="ReloadExternalChangesButton"
+                  Content="Reload"
+                  Click="OnReloadExternalChangesClick" />
+          <Button x:Name="OverwriteExternalChangesButton"
+                  Content="Overwrite"
+                  Click="OnOverwriteExternalChangesClick" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </Border>
   </Grid>
 </Window>

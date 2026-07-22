@@ -19,6 +19,8 @@ public sealed class NotepadDocument
 
     public DocumentFileReference? File { get; private set; }
 
+    public FileContentVersion? FileVersion { get; private set; }
+
     public string DisplayName => File?.DisplayName ?? GetUntitledPreview();
 
     public string SuggestedFileName
@@ -71,21 +73,60 @@ public sealed class NotepadDocument
         File = file;
         Encoding = metadata.Encoding;
         LineEnding = metadata.LineEnding;
+        FileVersion = metadata.Version;
     }
 
     public async Task SaveAsync(
         ITextFileStore store,
         DocumentFileReference? destination = null,
+        bool overwriteExternalChanges = false,
         CancellationToken cancellationToken = default)
     {
         var file = destination ?? File
             ?? throw new InvalidOperationException("A destination is required for an untitled document.");
-        var metadata = new TextFileMetadata(Encoding, LineEnding);
-        metadata = await store.SaveAsync(file, Buffer, metadata, cancellationToken);
+        var savingCurrentFile = File is not null && PathsReferToSameFile(File.Path, file.Path);
+        var metadata = new TextFileMetadata(Encoding, LineEnding, Version: FileVersion);
+        var options = new TextFileSaveOptions(
+            savingCurrentFile ? FileVersion : null,
+            overwriteExternalChanges);
+        metadata = await store.SaveAsync(file, Buffer, metadata, options, cancellationToken);
         File = file;
         Encoding = metadata.Encoding;
         LineEnding = metadata.LineEnding;
+        FileVersion = metadata.Version;
     }
+
+    public async Task<ExternalFileChange> CheckForExternalChangesAsync(
+        ITextFileStore store,
+        CancellationToken cancellationToken = default)
+    {
+        if (File is null || FileVersion is null)
+        {
+            return ExternalFileChange.None;
+        }
+
+        var currentVersion = await store.GetVersionAsync(File, cancellationToken);
+        if (currentVersion is null)
+        {
+            return ExternalFileChange.Deleted;
+        }
+
+        if (!FileVersion.HasSameContent(currentVersion))
+        {
+            return ExternalFileChange.Modified;
+        }
+
+        // A timestamp-only touch is not a content conflict. Adopt its metadata so
+        // future fast-path checks can use the newest observed version.
+        FileVersion = currentVersion;
+        return ExternalFileChange.None;
+    }
+
+    private static bool PathsReferToSameFile(string first, string second) =>
+        string.Equals(
+            Path.GetFullPath(first),
+            Path.GetFullPath(second),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
     private string GetUntitledPreview()
     {

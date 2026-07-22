@@ -1,4 +1,5 @@
 using System.Text;
+using System.Security.Cryptography;
 using Notepads.Utilities;
 using UtfUnknown;
 
@@ -19,43 +20,74 @@ public sealed class PhysicalTextFileStore : ITextFileStore
         ArgumentNullException.ThrowIfNull(file);
         ArgumentNullException.ThrowIfNull(destination);
 
-        await using var stream = new FileStream(
-            file.Path,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.ReadWrite | FileShare.Delete,
-            CopyBufferSize,
-            FileOptions.Asynchronous | FileOptions.SequentialScan);
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            await using var stream = OpenRead(file.Path);
+            var initialLength = stream.Length;
+            var initialModified = File.GetLastWriteTimeUtc(file.Path);
+            var encoding = requestedEncoding ?? DetectEncoding(stream);
+            var hasPreamble = HasMatchingPreamble(stream, encoding);
+            stream.Position = 0;
 
-        var encoding = requestedEncoding ?? DetectEncoding(stream);
-        stream.Position = 0;
-        using var reader = new StreamReader(
-            stream,
-            encoding,
-            detectEncodingFromByteOrderMarks: true,
-            bufferSize: CopyBufferSize,
-            leaveOpen: true);
-        var text = await reader.ReadToEndAsync(cancellationToken);
-        encoding = PreservePreamblePreference(reader.CurrentEncoding, HasMatchingPreamble(stream, reader.CurrentEncoding));
+            string text;
+            string hash;
+            using (var hasher = SHA256.Create())
+            {
+                await using var hashingStream = new CryptoStream(
+                    stream,
+                    hasher,
+                    CryptoStreamMode.Read,
+                    leaveOpen: true);
+                using var reader = new StreamReader(
+                    hashingStream,
+                    encoding,
+                    detectEncodingFromByteOrderMarks: true,
+                    bufferSize: CopyBufferSize,
+                    leaveOpen: false);
+                text = await reader.ReadToEndAsync(cancellationToken);
+                encoding = PreservePreamblePreference(reader.CurrentEncoding, hasPreamble);
+                hash = Convert.ToHexString(hasher.Hash
+                    ?? throw new IOException($"Could not fingerprint '{file.DisplayName}'."));
+            }
 
-        destination.Text = text;
-        destination.MarkAsOriginal();
+            var finalLength = stream.Length;
+            var finalModified = File.GetLastWriteTimeUtc(file.Path);
+            if (initialLength != finalLength || initialModified != finalModified)
+            {
+                if (attempt < 2)
+                {
+                    continue;
+                }
 
-        return new TextFileMetadata(
-            encoding,
-            LineEndingUtility.GetLineEndingTypeFromText(text),
-            File.GetLastWriteTimeUtc(file.Path));
+                throw new IOException($"'{file.DisplayName}' kept changing while it was being opened.");
+            }
+
+            destination.Text = text;
+            destination.MarkAsOriginal();
+            var version = new FileContentVersion(finalLength, finalModified, hash);
+            return new TextFileMetadata(
+                encoding,
+                LineEndingUtility.GetLineEndingTypeFromText(text),
+                finalModified,
+                version);
+        }
+
+        throw new IOException($"Could not read a stable version of '{file.DisplayName}'.");
     }
 
     public async Task<TextFileMetadata> SaveAsync(
         DocumentFileReference file,
         ITextBuffer source,
         TextFileMetadata metadata,
+        TextFileSaveOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(file);
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(metadata);
+        options ??= new TextFileSaveOptions();
+
+        await EnsureExpectedVersionAsync(file, options, cancellationToken);
 
         var directory = Path.GetDirectoryName(file.Path)
             ?? throw new IOException("The destination does not have a parent directory.");
@@ -78,9 +110,14 @@ public sealed class PhysicalTextFileStore : ITextFileStore
                 await writer.FlushAsync(cancellationToken);
             }
 
+            // Recheck after rendering the temporary file. This narrows the race
+            // window and prevents a long save from overwriting an intervening edit.
+            await EnsureExpectedVersionAsync(file, options, cancellationToken);
             File.Move(temporaryPath, file.Path, overwrite: true);
+            var version = await GetVersionAsync(file, cancellationToken)
+                ?? throw new IOException($"'{file.DisplayName}' disappeared immediately after it was saved.");
             source.MarkAsOriginal();
-            return metadata with { LastModified = File.GetLastWriteTimeUtc(file.Path) };
+            return metadata with { LastModified = version.LastModified, Version = version };
         }
         finally
         {
@@ -90,6 +127,70 @@ public sealed class PhysicalTextFileStore : ITextFileStore
             }
         }
     }
+
+    public async Task<FileContentVersion?> GetVersionAsync(
+        DocumentFileReference file,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            try
+            {
+                await using var stream = OpenRead(file.Path);
+                var initialLength = stream.Length;
+                var initialModified = File.GetLastWriteTimeUtc(file.Path);
+                var hash = Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken));
+                var finalLength = stream.Length;
+                var finalModified = File.GetLastWriteTimeUtc(file.Path);
+                if (initialLength == finalLength && initialModified == finalModified)
+                {
+                    return new FileContentVersion(finalLength, finalModified, hash);
+                }
+            }
+            catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
+            {
+                return null;
+            }
+
+            if (attempt == 2)
+            {
+                throw new IOException($"'{file.DisplayName}' kept changing while it was being checked.");
+            }
+        }
+
+        return null;
+    }
+
+    private async Task EnsureExpectedVersionAsync(
+        DocumentFileReference file,
+        TextFileSaveOptions options,
+        CancellationToken cancellationToken)
+    {
+        if (options.ExpectedVersion is null || options.OverwriteExternalChanges)
+        {
+            return;
+        }
+
+        var current = await GetVersionAsync(file, cancellationToken);
+        if (current is null)
+        {
+            throw new FileChangedExternallyException(file, ExternalFileChange.Deleted);
+        }
+
+        if (!options.ExpectedVersion.HasSameContent(current))
+        {
+            throw new FileChangedExternallyException(file, ExternalFileChange.Modified);
+        }
+    }
+
+    private static FileStream OpenRead(string path) => new(
+        path,
+        FileMode.Open,
+        FileAccess.Read,
+        FileShare.ReadWrite | FileShare.Delete,
+        CopyBufferSize,
+        FileOptions.Asynchronous | FileOptions.SequentialScan);
 
     private static Encoding DetectEncoding(Stream stream)
     {
