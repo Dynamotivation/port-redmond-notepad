@@ -69,6 +69,8 @@ public partial class MainWindow : Window
             .ToArray();
         _printService = PlatformPrintServiceFactory.Create();
         ConfigureFileMenuShortcuts();
+        Resources["CloseTabToolTip"] = FormatCommandToolTip("Close tab", NotepadShortcutIds.CloseTab);
+        Resources["NewTabToolTip"] = FormatCommandToolTip("New tab", NotepadShortcutIds.NewTab);
         AddHandler(KeyDownEvent, OnNotepadKeyDown, RoutingStrategies.Tunnel);
         _appearance = NotepadSettingsStore.LoadAppearance();
         _themePreference = NotepadSettingsStore.LoadThemePreference();
@@ -309,7 +311,7 @@ public partial class MainWindow : Window
         return true;
     }
 
-    private void OnFileMenuOpened(object? sender, EventArgs e)
+    private void OnFileMenuOpened(object? sender, RoutedEventArgs e)
     {
         if (_recentFilesEnabled)
         {
@@ -350,7 +352,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        RecentFilesMenuItem.Items.Add(new MenuItem { Header = "-" });
+        var separator = new Separator();
+        separator.Classes.Add("menuDivider");
+        RecentFilesMenuItem.Items.Add(separator);
         var clearItem = new MenuItem { Header = "Clear list" };
         clearItem.Click += OnClearRecentFilesClick;
         RecentFilesMenuItem.Items.Add(clearItem);
@@ -534,7 +538,7 @@ public partial class MainWindow : Window
         ReportPrintResult(result, "Page setup updated.");
     }
 
-    private void OnEditMenuOpened(object? sender, EventArgs e)
+    private void OnEditMenuOpened(object? sender, RoutedEventArgs e)
     {
         var hasSelection = Editor.SelectionLength > 0;
         UndoMenuItem.IsEnabled = Editor.CanUndo;
@@ -551,7 +555,7 @@ public partial class MainWindow : Window
         SelectAllMenuItem.IsEnabled = true;
     }
 
-    private void OnViewMenuOpened(object? sender, EventArgs e)
+    private void OnViewMenuOpened(object? sender, RoutedEventArgs e)
     {
         StatusBarMenuItem.IsChecked = _viewOptions.ShowStatusBar;
         WordWrapMenuItem.IsChecked = _viewOptions.WordWrap;
@@ -886,6 +890,9 @@ public partial class MainWindow : Window
         void Apply(MenuItem item, string shortcutId) =>
             item.InputGesture = AvaloniaShortcutAdapter.ToKeyGesture(_shortcutService.GetGesture(shortcutId));
     }
+
+    private string FormatCommandToolTip(string commandName, string shortcutId) =>
+        $"{commandName} ({_shortcutService.GetGestureDisplayText(shortcutId)})";
 
     private async void OnNotepadKeyDown(object? sender, KeyEventArgs e)
     {
