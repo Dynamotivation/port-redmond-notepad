@@ -376,6 +376,8 @@
               <MenuItem x:Name="PasteMenuItem" Header="Paste" Click="OnPasteClick" />
               <MenuItem x:Name="DeleteMenuItem" Header="Delete" Click="OnDeleteClick" />
               <MenuItem Header="-" />
+              <MenuItem Header="Clear formatting" IsEnabled="False" />
+              <MenuItem Header="-" />
               <MenuItem x:Name="FindMenuItem" Header="Find" Click="OnFindClick" />
               <MenuItem x:Name="FindNextMenuItem" Header="Find next" Click="OnFindNextClick" />
               <MenuItem x:Name="FindPreviousMenuItem" Header="Find previous" Click="OnFindPreviousClick" />

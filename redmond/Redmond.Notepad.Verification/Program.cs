@@ -96,6 +96,27 @@ static void VerifyShortcutConventions()
         "Windows Replace must preserve the reference Notepad binding");
     Assert(macOS.GetGestureDisplayText(NotepadShortcutIds.Replace) == "⌥⌘F",
         "macOS Replace must avoid the browser-history Command+Shift+H convention");
+    var windowsEditGestures = new Dictionary<string, string>
+    {
+        [NotepadShortcutIds.Undo] = "Ctrl+Z",
+        [NotepadShortcutIds.Cut] = "Ctrl+X",
+        [NotepadShortcutIds.Copy] = "Ctrl+C",
+        [NotepadShortcutIds.Paste] = "Ctrl+V",
+        [NotepadShortcutIds.Delete] = "Delete",
+        [NotepadShortcutIds.Find] = "Ctrl+F",
+        [NotepadShortcutIds.FindNext] = "F3",
+        [NotepadShortcutIds.FindPrevious] = "Shift+F3",
+        [NotepadShortcutIds.Replace] = "Ctrl+H",
+        [NotepadShortcutIds.GoTo] = "Ctrl+G",
+        [NotepadShortcutIds.SelectAll] = "Ctrl+A",
+        [NotepadShortcutIds.TimeDate] = "F5",
+    };
+    foreach (var (shortcutId, expectedGesture) in windowsEditGestures)
+    {
+        Assert(windows.GetGestureDisplayText(shortcutId) == expectedGesture,
+            $"Windows {shortcutId} must display as {expectedGesture}");
+    }
+
     Assert(windows.GetConflicts().Count == 0 && macOS.GetConflicts().Count == 0,
         "Notepad shortcut catalogs must not contain duplicate active gestures");
     Assert(macOS.ValidateConventions().All(issue => issue.Severity != ShortcutConventionSeverity.Error),
