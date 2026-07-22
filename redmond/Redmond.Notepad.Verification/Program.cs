@@ -1,5 +1,4 @@
 using System.Text;
-using Notepads.Utilities;
 using Redmond.Notepad.Core;
 using Redmond.Shortcuts;
 

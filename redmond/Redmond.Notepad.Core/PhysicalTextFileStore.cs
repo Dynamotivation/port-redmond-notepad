@@ -1,6 +1,5 @@
 using System.Text;
 using System.Security.Cryptography;
-using Notepads.Utilities;
 using UtfUnknown;
 
 namespace Redmond.Notepad.Core;

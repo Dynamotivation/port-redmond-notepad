@@ -1,4 +1,3 @@
-using Notepads.Utilities;
 using System.Text;
 
 namespace Redmond.Notepad.Core;

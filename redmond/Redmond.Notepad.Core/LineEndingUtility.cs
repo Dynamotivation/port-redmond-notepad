@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Notepads.Utilities;
+namespace Redmond.Notepad.Core;
 
 public enum LineEnding
 {
@@ -75,18 +75,23 @@ public static class LineEndingUtility
         var converted = new StringBuilder(text.Length);
         for (var index = 0; index < text.Length; index++)
         {
-            if (text[index] is '\r' or '\n')
+            var character = text[index];
+            if (character == '\r')
             {
-                if (text[index] == '\r' && index + 1 < text.Length && text[index + 1] == '\n')
+                if (index + 1 < text.Length && text[index + 1] == '\n')
                 {
                     index++;
                 }
 
                 converted.Append(separator);
             }
+            else if (character == '\n')
+            {
+                converted.Append(separator);
+            }
             else
             {
-                converted.Append(text[index]);
+                converted.Append(character);
             }
         }
 
