@@ -347,11 +347,12 @@
       <StackPanel Orientation="Horizontal" Spacing="1">
         <Button Classes="chrome" Content="File">
           <Button.Flyout>
-            <MenuFlyout Placement="BottomEdgeAlignedLeft">
+            <MenuFlyout Placement="BottomEdgeAlignedLeft" Opened="OnFileMenuOpened">
               <MenuItem x:Name="NewTabMenuItem" Header="New tab" Click="OnNewTabClick" />
               <MenuItem x:Name="NewWindowMenuItem" Header="New window" Click="OnNewWindowClick" />
+              <MenuItem Header="New Markdown tab" />
               <MenuItem x:Name="OpenMenuItem" Header="Open" Click="OnOpenFilesClick" />
-              <MenuItem Header="-" />
+              <MenuItem x:Name="RecentFilesMenuItem" Header="Recent" />
               <MenuItem x:Name="SaveMenuItem" Header="Save" Click="OnSaveClick" />
               <MenuItem x:Name="SaveAsMenuItem" Header="Save as" Click="OnSaveAsClick" />
               <MenuItem x:Name="SaveAllMenuItem" Header="Save all" Click="OnSaveAllClick" />

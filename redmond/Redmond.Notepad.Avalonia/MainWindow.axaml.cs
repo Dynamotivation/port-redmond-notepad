@@ -32,9 +32,11 @@ public partial class MainWindow : Window
     private readonly IReadOnlyList<IDisposable> _shortcutRegistrations;
     private readonly WindowAppearanceController _appearanceController;
     private readonly IPlatformPrintService _printService;
+    private RecentFileList _recentFiles;
     private WindowAppearanceOptions _appearance;
     private NotepadPageSettings _pageSettings = new();
     private AppThemePreference _themePreference;
+    private bool _recentFilesEnabled;
     private bool _isLoadingTab;
     private bool _isUpdatingTabScrollButtons;
     private bool _allowWindowClose;
@@ -66,12 +68,16 @@ public partial class MainWindow : Window
         AddHandler(KeyDownEvent, OnNotepadKeyDown, RoutingStrategies.Tunnel);
         _appearance = NotepadSettingsStore.LoadAppearance();
         _themePreference = NotepadSettingsStore.LoadThemePreference();
+        _recentFiles = NotepadSettingsStore.LoadRecentFiles();
+        _recentFilesEnabled = NotepadSettingsStore.LoadRecentFilesEnabled();
         _appearanceController = WindowAppearanceController.Attach(this, WindowSurface, _appearance);
         _appearanceController.PresentationChanged += (_, _) => UpdateWindowPresentation();
         SettingsPage.SetAppearance(_appearance);
         SettingsPage.SetThemePreference(_themePreference);
+        SettingsPage.SetRecentFilesEnabled(_recentFilesEnabled);
         SettingsPage.AppearanceChanged += OnAppearanceChanged;
         SettingsPage.ThemeChanged += OnThemeChanged;
+        SettingsPage.RecentFilesEnabledChanged += OnRecentFilesEnabledChanged;
         foreach (var tab in _workspace.Tabs)
         {
             _tabs.Add(new NotepadTabItem(tab));
@@ -79,6 +85,7 @@ public partial class MainWindow : Window
         TabsList.ItemsSource = _tabs;
         TabsList.SelectedItem = _tabs.Single(item => ReferenceEquals(item.Tab, _workspace.SelectedTab));
         RefreshTabSeparators();
+        RefreshRecentFilesMenu();
         UpdateWindowPresentation();
         Editor.TextChanged += OnEditorTextChanged;
         Editor.TextArea.Caret.PositionChanged += OnCaretPositionChanged;
@@ -142,6 +149,18 @@ public partial class MainWindow : Window
         UpdateWindowPresentation();
     }
 
+    private void OnRecentFilesEnabledChanged(object? sender, bool enabled)
+    {
+        _recentFilesEnabled = enabled;
+        NotepadSettingsStore.SaveRecentFilesEnabled(enabled);
+        if (enabled)
+        {
+            _recentFiles = NotepadSettingsStore.LoadRecentFiles();
+        }
+
+        RefreshRecentFilesMenu();
+    }
+
     private void OnWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
     {
         if (e.Property == ActualThemeVariantProperty)
@@ -184,6 +203,7 @@ public partial class MainWindow : Window
     private async Task OpenFilesAsync(IReadOnlyList<DocumentFileReference> files)
     {
         var selectedDocumentChanged = false;
+        var recentFilesChanged = false;
         string? errorMessage = null;
         foreach (var file in files)
         {
@@ -193,6 +213,7 @@ public partial class MainWindow : Window
             {
                 TabsList.SelectedItem = existing;
                 selectedDocumentChanged = true;
+                recentFilesChanged |= RememberRecentFile(file.Path);
                 continue;
             }
 
@@ -215,6 +236,7 @@ public partial class MainWindow : Window
                 item.RefreshTitle();
                 TabsList.SelectedItem = item;
                 selectedDocumentChanged = true;
+                recentFilesChanged |= RememberRecentFile(file.Path);
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or DecoderFallbackException)
             {
@@ -229,6 +251,11 @@ public partial class MainWindow : Window
         }
 
         RefreshTabSeparators();
+        if (recentFilesChanged)
+        {
+            RefreshRecentFilesMenu();
+        }
+
         if (selectedDocumentChanged)
         {
             LoadSelectedTab();
@@ -239,6 +266,89 @@ public partial class MainWindow : Window
         }
 
         ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
+    }
+
+    private bool RememberRecentFile(string path)
+    {
+        if (!_recentFilesEnabled)
+        {
+            return false;
+        }
+
+        _recentFiles = NotepadSettingsStore.RecordRecentFile(path);
+        return true;
+    }
+
+    private void OnFileMenuOpened(object? sender, EventArgs e)
+    {
+        if (_recentFilesEnabled)
+        {
+            _recentFiles = NotepadSettingsStore.LoadRecentFiles();
+        }
+
+        RefreshRecentFilesMenu();
+    }
+
+    private void RefreshRecentFilesMenu()
+    {
+        RecentFilesMenuItem.IsVisible = _recentFilesEnabled;
+        RecentFilesMenuItem.Items.Clear();
+        if (!_recentFilesEnabled)
+        {
+            return;
+        }
+
+        foreach (var path in _recentFiles.Paths)
+        {
+            var item = new MenuItem
+            {
+                Header = Path.GetFileName(path),
+                Tag = path,
+            };
+            ToolTip.SetTip(item, path);
+            item.Click += OnRecentFileClick;
+            RecentFilesMenuItem.Items.Add(item);
+        }
+
+        if (_recentFiles.Paths.Count == 0)
+        {
+            RecentFilesMenuItem.Items.Add(new MenuItem
+            {
+                Header = "No recent files",
+                IsEnabled = false,
+            });
+            return;
+        }
+
+        RecentFilesMenuItem.Items.Add(new MenuItem { Header = "-" });
+        var clearItem = new MenuItem { Header = "Clear list" };
+        clearItem.Click += OnClearRecentFilesClick;
+        RecentFilesMenuItem.Items.Add(clearItem);
+    }
+
+    private async void OnRecentFileClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: string path })
+        {
+            return;
+        }
+
+        if (!File.Exists(path))
+        {
+            _recentFiles = NotepadSettingsStore.RemoveRecentFile(path);
+            RefreshRecentFilesMenu();
+            DocumentSummary.Text = $"Could not find {Path.GetFileName(path)}.";
+            return;
+        }
+
+        await OpenFilesAsync([new DocumentFileReference(path)]);
+    }
+
+    private void OnClearRecentFilesClick(object? sender, RoutedEventArgs e)
+    {
+        NotepadSettingsStore.ClearRecentFiles();
+        _recentFiles = new RecentFileList();
+        RefreshRecentFilesMenu();
     }
 
     private async void OnSaveClick(object? sender, RoutedEventArgs e) =>

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Redmond.Avalonia.Controls;
+using Redmond.Notepad.Core;
 
 namespace Redmond.Notepad.Avalonia;
 
@@ -10,6 +11,8 @@ internal static class NotepadSettingsStore
         "RedmondNotepad");
     private static readonly string SettingsPath = Path.Combine(SettingsDirectory, "settings.json");
     private static readonly string ThemePath = Path.Combine(SettingsDirectory, "theme.txt");
+    private static readonly string RecentFilesPath = Path.Combine(SettingsDirectory, "recent-files.json");
+    private static readonly string RecentFilesEnabledPath = Path.Combine(SettingsDirectory, "recent-files-enabled.txt");
 
     public static AppThemePreference LoadThemePreference()
     {
@@ -104,6 +107,103 @@ internal static class NotepadSettingsStore
         catch (UnauthorizedAccessException)
         {
             // Appearance remains live when persistence is unavailable.
+        }
+    }
+
+    public static bool LoadRecentFilesEnabled()
+    {
+        try
+        {
+            return !File.Exists(RecentFilesEnabledPath)
+                || !bool.TryParse(File.ReadAllText(RecentFilesEnabledPath), out var enabled)
+                || enabled;
+        }
+        catch (IOException)
+        {
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return true;
+        }
+    }
+
+    public static void SaveRecentFilesEnabled(bool enabled)
+    {
+        try
+        {
+            Directory.CreateDirectory(SettingsDirectory);
+            File.WriteAllText(RecentFilesEnabledPath, enabled.ToString());
+        }
+        catch (IOException)
+        {
+            // The setting remains live when persistence is unavailable.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // The setting remains live when persistence is unavailable.
+        }
+    }
+
+    public static RecentFileList LoadRecentFiles()
+    {
+        try
+        {
+            if (!File.Exists(RecentFilesPath))
+            {
+                return new RecentFileList();
+            }
+
+            return new RecentFileList(
+                JsonSerializer.Deserialize<string[]>(File.ReadAllText(RecentFilesPath)) ?? []);
+        }
+        catch (Exception exception) when (exception is IOException
+            or UnauthorizedAccessException
+            or JsonException
+            or ArgumentException
+            or NotSupportedException)
+        {
+            return new RecentFileList();
+        }
+    }
+
+    public static RecentFileList RecordRecentFile(string path)
+    {
+        var recentFiles = LoadRecentFiles();
+        recentFiles.Add(path);
+        SaveRecentFiles(recentFiles);
+        return recentFiles;
+    }
+
+    public static RecentFileList RemoveRecentFile(string path)
+    {
+        var recentFiles = LoadRecentFiles();
+        if (recentFiles.Remove(path))
+        {
+            SaveRecentFiles(recentFiles);
+        }
+
+        return recentFiles;
+    }
+
+    public static void ClearRecentFiles() => SaveRecentFiles(new RecentFileList());
+
+    private static void SaveRecentFiles(RecentFileList recentFiles)
+    {
+        try
+        {
+            Directory.CreateDirectory(SettingsDirectory);
+            var temporaryPath = RecentFilesPath + ".tmp";
+            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(recentFiles.Paths));
+            File.Move(temporaryPath, RecentFilesPath, overwrite: true);
+        }
+        catch (IOException)
+        {
+            // Recent files remain available for this session when persistence is unavailable.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Recent files remain available for this session when persistence is unavailable.
         }
     }
 }

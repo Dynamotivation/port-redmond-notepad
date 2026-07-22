@@ -44,6 +44,7 @@ try
     VerifyUntitledPreview();
     VerifyPortableEditLogic();
     VerifyPrintFieldFormatting();
+    VerifyRecentFiles();
     VerifyShortcutConventions();
 
     Console.WriteLine("Core file verification: passed");
@@ -137,6 +138,34 @@ static void VerifyPrintFieldFormatting()
     Assert(
         fields.Right.StartsWith("7/22/2026 & 4:42", StringComparison.Ordinal),
         "print fields must expand date, time, and escaped ampersands");
+}
+
+static void VerifyRecentFiles()
+{
+    var paths = Enumerable.Range(0, 12)
+        .Select(index => Path.Combine(Path.GetTempPath(), $"recent-{index}.txt"))
+        .ToArray();
+    var recentFiles = new RecentFileList();
+    foreach (var path in paths)
+    {
+        recentFiles.Add(path);
+    }
+
+    Assert(recentFiles.Paths.Count == RecentFileList.MaximumCount,
+        "recent files must be capped at ten entries");
+    Assert(recentFiles.Paths[0] == Path.GetFullPath(paths[^1]),
+        "the last opened file must be the first recent entry");
+    Assert(!recentFiles.Paths.Contains(Path.GetFullPath(paths[0])),
+        "the oldest file must fall out of a full recent list");
+
+    recentFiles.Add(paths[5]);
+    Assert(recentFiles.Paths[0] == Path.GetFullPath(paths[5])
+        && recentFiles.Paths.Count(path => path == Path.GetFullPath(paths[5])) == 1,
+        "reopening a file must promote it without creating duplicates");
+    Assert(recentFiles.Remove(paths[5]) && !recentFiles.Paths.Contains(Path.GetFullPath(paths[5])),
+        "removed recent files must disappear from the list");
+    recentFiles.Clear();
+    Assert(recentFiles.Paths.Count == 0, "clearing recent files must empty the list");
 }
 
 static async Task VerifyExternalChangeProtectionAsync(
