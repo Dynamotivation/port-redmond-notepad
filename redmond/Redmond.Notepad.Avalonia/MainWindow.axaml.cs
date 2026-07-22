@@ -1386,13 +1386,14 @@ public partial class MainWindow : Window
         SettingsTitleBarContent.Margin = new Thickness(leftInset, 0, captionWidth, 0);
 
         var dark = ActualThemeVariant == ThemeVariant.Dark;
+        WindowSurface.Classes.Set("backdrop", _appearanceController.IsBackdropActive);
         DocumentTitleBar.Background = _appearanceController.IsBackdropActive
             ? Brushes.Transparent
             : new SolidColorBrush(Color.Parse(dark ? "#202020" : "#F3F3F3"));
         WindowSurface.Background = new SolidColorBrush(Color.Parse(
             _appearanceController.IsBackdropActive
                 ? dark ? "#18383D40" : "#18F3F3F3"
-                : dark ? "#202027" : "#F3F3F3"));
+                : dark ? "#202020" : "#F3F3F3"));
     }
 
     private void OnEditorTextChanged(object? sender, EventArgs e)

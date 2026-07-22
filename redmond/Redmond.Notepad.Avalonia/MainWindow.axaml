@@ -20,22 +20,44 @@
     <ResourceDictionary>
       <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Dark">
-          <SolidColorBrush x:Key="ChromeHoverBrush" Color="#343C4B" />
+          <!--
+            Interaction colors are translucent overlays. Over the measured
+            opaque surfaces they composite to the Windows Notepad reference:
+            #0EFFFFFF over #202020 -> #2C2C2C (tab hover)
+            #0FFFFFFF over #2C2C2C -> #383838 (button hover)
+          -->
+          <SolidColorBrush x:Key="ChromeHoverBrush" Color="#0FFFFFFF" />
+          <SolidColorBrush x:Key="TabHoverBrush" Color="#0EFFFFFF" />
           <SolidColorBrush x:Key="NotepadTitleBarBrush" Color="#202020" />
-          <SolidColorBrush x:Key="NotepadSelectedTabBrush" Color="#1B202B" />
-          <SolidColorBrush x:Key="NotepadMenuBarBrush" Color="#1B202B" />
-          <SolidColorBrush x:Key="NotepadEditorBrush" Color="#292B32" />
-          <SolidColorBrush x:Key="NotepadStatusBrush" Color="#1B2332" />
-          <SolidColorBrush x:Key="NotepadDividerBrush" Color="#364052" />
+          <SolidColorBrush x:Key="NotepadSelectedTabBrush" Color="#2C2C2C" />
+          <SolidColorBrush x:Key="NotepadMenuBarBrush" Color="#2C2C2C" />
+          <SolidColorBrush x:Key="NotepadEditorBrush" Color="#272727" />
+          <SolidColorBrush x:Key="NotepadStatusBrush" Color="#2C2C2C" />
+          <SolidColorBrush x:Key="NotepadDividerBrush" Color="#3D3D3D" />
+          <SolidColorBrush x:Key="NotepadSecondaryForegroundBrush" Color="#CFCFCF" />
+          <SolidColorBrush x:Key="NotepadSelectedForegroundBrush" Color="#E0E0E0" />
+          <SolidColorBrush x:Key="NotepadMenuForegroundBrush" Color="#F0F0F0" />
+          <SolidColorBrush x:Key="NotepadEditorForegroundBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="NotepadMicaRaisedSurfaceBrush" Color="#0EFFFFFF" />
+          <SolidColorBrush x:Key="NotepadMicaEditorSurfaceBrush" Color="#08FFFFFF" />
+          <SolidColorBrush x:Key="NotepadMicaDividerBrush" Color="#15FFFFFF" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Light">
           <SolidColorBrush x:Key="ChromeHoverBrush" Color="#11000000" />
+          <SolidColorBrush x:Key="TabHoverBrush" Color="#0E000000" />
           <SolidColorBrush x:Key="NotepadTitleBarBrush" Color="#F3F3F3" />
           <SolidColorBrush x:Key="NotepadSelectedTabBrush" Color="#FFFFFF" />
           <SolidColorBrush x:Key="NotepadMenuBarBrush" Color="#F9F9F9" />
           <SolidColorBrush x:Key="NotepadEditorBrush" Color="#FFFFFF" />
           <SolidColorBrush x:Key="NotepadStatusBrush" Color="#F3F3F3" />
           <SolidColorBrush x:Key="NotepadDividerBrush" Color="#D8D8D8" />
+          <SolidColorBrush x:Key="NotepadSecondaryForegroundBrush" Color="#5E5E5E" />
+          <SolidColorBrush x:Key="NotepadSelectedForegroundBrush" Color="#1A1A1A" />
+          <SolidColorBrush x:Key="NotepadMenuForegroundBrush" Color="#1A1A1A" />
+          <SolidColorBrush x:Key="NotepadEditorForegroundBrush" Color="#1A1A1A" />
+          <SolidColorBrush x:Key="NotepadMicaRaisedSurfaceBrush" Color="#0E000000" />
+          <SolidColorBrush x:Key="NotepadMicaEditorSurfaceBrush" Color="#08000000" />
+          <SolidColorBrush x:Key="NotepadMicaDividerBrush" Color="#15000000" />
         </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>
       <FontFamily x:Key="RedmondFluentIconFont">avares://Redmond.Avalonia.Controls/Assets/RedmondFluentIcons.ttf#Calculator Fluent Icons</FontFamily>
@@ -54,6 +76,15 @@
     <Style Selector="Button.chrome:pointerover">
       <Setter Property="Background" Value="{DynamicResource ChromeHoverBrush}" />
     </Style>
+    <Style Selector="Button.menuCommand">
+      <Setter Property="Foreground" Value="{DynamicResource NotepadMenuForegroundBrush}" />
+    </Style>
+    <Style Selector="Button.tabGlyph">
+      <Setter Property="Foreground" Value="{DynamicResource NotepadSecondaryForegroundBrush}" />
+    </Style>
+    <Style Selector="Button.tabGlyph:pointerover">
+      <Setter Property="Foreground" Value="{DynamicResource NotepadSelectedForegroundBrush}" />
+    </Style>
     <Style Selector="RepeatButton.chrome">
       <Setter Property="MinWidth" Value="0" />
       <Setter Property="MinHeight" Value="0" />
@@ -64,6 +95,9 @@
     </Style>
     <Style Selector="RepeatButton.chrome:pointerover">
       <Setter Property="Background" Value="{DynamicResource ChromeHoverBrush}" />
+    </Style>
+    <Style Selector="RepeatButton.tabChevron">
+      <Setter Property="Foreground" Value="{DynamicResource NotepadSecondaryForegroundBrush}" />
     </Style>
     <Style Selector="ListBox.tabStrip">
       <Setter Property="Background" Value="Transparent" />
@@ -85,6 +119,7 @@
       <Setter Property="Margin" Value="0,0,-16,0" />
       <Setter Property="CornerRadius" Value="8,8,0,0" />
       <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource NotepadSecondaryForegroundBrush}" />
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
       <Setter Property="Template">
         <ControlTemplate>
@@ -122,10 +157,11 @@
       </Setter>
     </Style>
     <Style Selector="ListBox.tabStrip ListBoxItem:pointerover">
-      <Setter Property="Background" Value="{DynamicResource ChromeHoverBrush}" />
+      <Setter Property="Background" Value="{DynamicResource TabHoverBrush}" />
     </Style>
     <Style Selector="ListBox.tabStrip ListBoxItem:selected">
       <Setter Property="Background" Value="{DynamicResource NotepadSelectedTabBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource NotepadSelectedForegroundBrush}" />
       <Setter Property="ZIndex" Value="1" />
     </Style>
     <Style Selector="ListBox.tabStrip ListBoxItem:selected:pointerover">
@@ -137,10 +173,30 @@
     <Style Selector="ListBox.tabStrip ListBoxItem:selected /template/ Path.inverseCorner">
       <Setter Property="IsVisible" Value="True" />
     </Style>
+    <Style Selector="Border.windowSurface.backdrop Border.menuSurface">
+      <Setter Property="Background" Value="{DynamicResource NotepadMicaRaisedSurfaceBrush}" />
+    </Style>
+    <Style Selector="Border.windowSurface.backdrop Border.editorSurface">
+      <Setter Property="Background" Value="{DynamicResource NotepadMicaEditorSurfaceBrush}" />
+    </Style>
+    <Style Selector="Border.windowSurface.backdrop Border.statusSurface">
+      <Setter Property="Background" Value="{DynamicResource NotepadMicaRaisedSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource NotepadMicaDividerBrush}" />
+    </Style>
+    <Style Selector="Border.statusSurface TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource NotepadSecondaryForegroundBrush}" />
+    </Style>
+    <Style Selector="Border.windowSurface.backdrop Border.tabSeparator">
+      <Setter Property="Background" Value="{DynamicResource NotepadMicaDividerBrush}" />
+    </Style>
+    <Style Selector="Border.windowSurface.backdrop ListBox.tabStrip ListBoxItem:selected">
+      <Setter Property="Background" Value="{DynamicResource NotepadMicaRaisedSurfaceBrush}" />
+    </Style>
   </Window.Styles>
 
   <Grid>
   <Border x:Name="WindowSurface"
+          Classes="windowSurface"
           Background="{DynamicResource ApplicationPageBackgroundThemeBrush}"
           BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
           BorderThickness="1"
@@ -167,7 +223,7 @@
         </Grid>
         <Grid Grid.Column="1" ColumnDefinitions="Auto,*,Auto">
           <RepeatButton x:Name="TabScrollLeftButton"
-                        Classes="chrome"
+                        Classes="chrome tabChevron"
                         Width="28"
                         Height="28"
                         HorizontalContentAlignment="Center"
@@ -211,7 +267,7 @@
                                  TextTrimming="CharacterEllipsis"
                                  Text="{Binding Title}" />
                       <Button Grid.Column="1"
-                              Classes="chrome"
+                              Classes="chrome tabGlyph"
                               Width="28"
                               Height="28"
                               Padding="0"
@@ -236,30 +292,30 @@
                         </Grid>
                       </Button>
                       <Border Grid.ColumnSpan="2"
+                              Classes="tabSeparator"
                               Width="1"
                               Height="22.2"
                               HorizontalAlignment="Left"
                               VerticalAlignment="Center"
                               IsHitTestVisible="False"
                               IsVisible="{Binding ShowLeadingSeparator}"
-                              Opacity="0.6"
-                              Background="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                              Background="{DynamicResource NotepadDividerBrush}" />
                       <Border Grid.ColumnSpan="2"
+                              Classes="tabSeparator"
                               Width="1"
                               Height="22.2"
                               HorizontalAlignment="Right"
                               VerticalAlignment="Center"
                               IsHitTestVisible="False"
                               IsVisible="{Binding ShowTrailingSeparator}"
-                              Opacity="0.6"
-                              Background="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                              Background="{DynamicResource NotepadDividerBrush}" />
                     </Grid>
                   </DataTemplate>
                 </ListBox.ItemTemplate>
               </ListBox>
 
               <Grid Width="37" Height="37">
-                <Button Classes="chrome"
+                <Button Classes="chrome tabGlyph"
                         Width="28"
                         Height="28"
                         Padding="0"
@@ -283,7 +339,7 @@
 
           <RepeatButton x:Name="TabScrollRightButton"
                         Grid.Column="2"
-                        Classes="chrome"
+                        Classes="chrome tabChevron"
                         Width="28"
                         Height="28"
                         HorizontalContentAlignment="Center"
@@ -340,12 +396,14 @@
           Grid.Row="1"
           Grid.RowSpan="3"
           RowDefinitions="38,*,Auto">
-    <Border Grid.Row="0" Background="{DynamicResource NotepadMenuBarBrush}">
+    <Border Grid.Row="0"
+            Classes="menuSurface"
+            Background="{DynamicResource NotepadMenuBarBrush}">
     <Grid x:Name="DocumentMenuBar"
           ColumnDefinitions="*,Auto"
           Margin="7,3">
       <StackPanel Orientation="Horizontal" Spacing="1">
-        <Button Classes="chrome" Content="File">
+        <Button Classes="chrome menuCommand" Content="File">
           <Button.Flyout>
             <MenuFlyout Placement="BottomEdgeAlignedLeft" Opened="OnFileMenuOpened">
               <MenuItem x:Name="NewTabMenuItem" Header="New tab" Click="OnNewTabClick" />
@@ -366,7 +424,7 @@
             </MenuFlyout>
           </Button.Flyout>
         </Button>
-        <Button Classes="chrome" Content="Edit">
+        <Button Classes="chrome menuCommand" Content="Edit">
           <Button.Flyout>
             <MenuFlyout Placement="BottomEdgeAlignedLeft" Opened="OnEditMenuOpened">
               <MenuItem x:Name="UndoMenuItem" Header="Undo" Click="OnUndoClick" />
@@ -391,7 +449,7 @@
             </MenuFlyout>
           </Button.Flyout>
         </Button>
-        <Button Classes="chrome" Content="View">
+        <Button Classes="chrome menuCommand" Content="View">
           <Button.Flyout>
             <MenuFlyout Placement="BottomEdgeAlignedLeft" Opened="OnViewMenuOpened">
               <MenuItem Header="Zoom">
@@ -417,7 +475,7 @@
         </Button>
       </StackPanel>
       <Button Grid.Column="1"
-              Classes="chrome"
+              Classes="chrome menuCommand"
               Width="36"
               Height="32"
               Padding="0"
@@ -436,10 +494,12 @@
     </Border>
 
     <Border Grid.Row="1"
+            Classes="editorSurface"
             Padding="14,10"
             Background="{DynamicResource NotepadEditorBrush}">
     <avaloniaEdit:TextEditor x:Name="Editor"
                              Background="Transparent"
+                             Foreground="{DynamicResource NotepadEditorForegroundBrush}"
                              WordWrap="True"
                              HorizontalScrollBarVisibility="Disabled"
                              VerticalScrollBarVisibility="Auto"
@@ -450,6 +510,7 @@
     </Border>
 
     <Border x:Name="StatusBar"
+            Classes="statusSurface"
             Grid.Row="2"
             Height="27"
             Background="{DynamicResource NotepadStatusBrush}"
@@ -460,7 +521,6 @@
             VerticalAlignment="Center">
         <TextBlock x:Name="DocumentSummary"
                    FontSize="12"
-                   Opacity="0.72"
                    Text="1 line · 0 characters" />
         <TextBlock x:Name="CursorStatus"
                    Grid.Column="1"
