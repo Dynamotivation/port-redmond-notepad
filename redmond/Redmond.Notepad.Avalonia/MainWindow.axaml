@@ -39,7 +39,6 @@
           <SolidColorBrush x:Key="NotepadMenuForegroundBrush" Color="#F0F0F0" />
           <SolidColorBrush x:Key="NotepadEditorForegroundBrush" Color="#FFFFFF" />
           <SolidColorBrush x:Key="NotepadMicaRaisedSurfaceBrush" Color="#0EFFFFFF" />
-          <SolidColorBrush x:Key="NotepadMicaEditorSurfaceBrush" Color="#08FFFFFF" />
           <SolidColorBrush x:Key="NotepadMicaDividerBrush" Color="#15FFFFFF" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Light">
@@ -56,11 +55,12 @@
           <SolidColorBrush x:Key="NotepadMenuForegroundBrush" Color="#1A1A1A" />
           <SolidColorBrush x:Key="NotepadEditorForegroundBrush" Color="#1A1A1A" />
           <SolidColorBrush x:Key="NotepadMicaRaisedSurfaceBrush" Color="#0E000000" />
-          <SolidColorBrush x:Key="NotepadMicaEditorSurfaceBrush" Color="#08000000" />
           <SolidColorBrush x:Key="NotepadMicaDividerBrush" Color="#15000000" />
         </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>
       <FontFamily x:Key="RedmondFluentIconFont">avares://Redmond.Avalonia.Controls/Assets/RedmondFluentIcons.ttf#Calculator Fluent Icons</FontFamily>
+      <x:String x:Key="CloseTabToolTip">Close tab</x:String>
+      <x:String x:Key="NewTabToolTip">New tab</x:String>
     </ResourceDictionary>
   </Window.Resources>
 
@@ -78,6 +78,49 @@
     </Style>
     <Style Selector="Button.menuCommand">
       <Setter Property="Foreground" Value="{DynamicResource NotepadMenuForegroundBrush}" />
+    </Style>
+    <Style Selector="Menu.documentMenu">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+    <Style Selector="Menu.documentMenu > MenuItem">
+      <Setter Property="Height" Value="32" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Padding" Value="10,5" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource NotepadMenuForegroundBrush}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+    <Style Selector="Menu.documentMenu > MenuItem:pointerover">
+      <Setter Property="Background" Value="{DynamicResource ChromeHoverBrush}" />
+    </Style>
+    <Style Selector="Menu.documentMenu > MenuItem[IsSubMenuOpen=true]">
+      <Setter Property="Background" Value="{DynamicResource ChromeHoverBrush}" />
+    </Style>
+    <!-- The 38 px command row contains 32 px menu headers inside a 3 px
+         vertical inset, so another 3 px places the popup on the editor edge. -->
+    <Style Selector="Menu.documentMenu > MenuItem /template/ Popup#PART_Popup">
+      <Setter Property="VerticalOffset" Value="3" />
+    </Style>
+    <!-- Match Calculator's compact stroked chevron rather than Fluent's
+         comparatively large filled submenu arrow. -->
+    <Style Selector="Path#PART_ChevronPath">
+      <Setter Property="Width" Value="6" />
+      <Setter Property="Height" Value="10" />
+      <Setter Property="Data" Value="M 1,1 L 5,5 L 1,9" />
+      <Setter Property="Fill" Value="Transparent" />
+      <Setter Property="Stroke" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=MenuItem}}" />
+      <Setter Property="StrokeThickness" Value="1.5" />
+      <Setter Property="Stretch" Value="Uniform" />
+    </Style>
+    <Style Selector="Separator.menuDivider">
+      <Setter Property="Height" Value="1" />
+      <Setter Property="MinHeight" Value="1" />
+      <Setter Property="Margin" Value="-4,4" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="Background" Value="{DynamicResource NotepadDividerBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource NotepadDividerBrush}" />
     </Style>
     <Style Selector="Button.tabGlyph">
       <Setter Property="Foreground" Value="{DynamicResource NotepadSecondaryForegroundBrush}" />
@@ -162,6 +205,7 @@
     <Style Selector="ListBox.tabStrip ListBoxItem:selected">
       <Setter Property="Background" Value="{DynamicResource NotepadSelectedTabBrush}" />
       <Setter Property="Foreground" Value="{DynamicResource NotepadSelectedForegroundBrush}" />
+      <Setter Property="ToolTip.Tip" Value="{ReflectionBinding Title}" />
       <Setter Property="ZIndex" Value="1" />
     </Style>
     <Style Selector="ListBox.tabStrip ListBoxItem:selected:pointerover">
@@ -173,11 +217,18 @@
     <Style Selector="ListBox.tabStrip ListBoxItem:selected /template/ Path.inverseCorner">
       <Setter Property="IsVisible" Value="True" />
     </Style>
+    <Style Selector="Border.menuSurface">
+      <Setter Property="Background" Value="{DynamicResource NotepadMenuBarBrush}" />
+    </Style>
+    <Style Selector="Border.editorSurface">
+      <Setter Property="Background" Value="{DynamicResource NotepadEditorBrush}" />
+    </Style>
+    <Style Selector="Border.statusSurface">
+      <Setter Property="Background" Value="{DynamicResource NotepadStatusBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource NotepadDividerBrush}" />
+    </Style>
     <Style Selector="Border.windowSurface.backdrop Border.menuSurface">
       <Setter Property="Background" Value="{DynamicResource NotepadMicaRaisedSurfaceBrush}" />
-    </Style>
-    <Style Selector="Border.windowSurface.backdrop Border.editorSurface">
-      <Setter Property="Background" Value="{DynamicResource NotepadMicaEditorSurfaceBrush}" />
     </Style>
     <Style Selector="Border.windowSurface.backdrop Border.statusSurface">
       <Setter Property="Background" Value="{DynamicResource NotepadMicaRaisedSurfaceBrush}" />
@@ -397,15 +448,12 @@
           Grid.RowSpan="3"
           RowDefinitions="38,*,Auto">
     <Border Grid.Row="0"
-            Classes="menuSurface"
-            Background="{DynamicResource NotepadMenuBarBrush}">
+            Classes="menuSurface">
     <Grid x:Name="DocumentMenuBar"
           ColumnDefinitions="*,Auto"
           Margin="7,3">
-      <StackPanel Orientation="Horizontal" Spacing="1">
-        <Button Classes="chrome menuCommand" Content="File">
-          <Button.Flyout>
-            <MenuFlyout Placement="BottomEdgeAlignedLeft" Opened="OnFileMenuOpened">
+      <Menu Classes="documentMenu">
+        <MenuItem Header="File" SubmenuOpened="OnFileMenuOpened">
               <MenuItem x:Name="NewTabMenuItem" Header="New tab" Click="OnNewTabClick" />
               <MenuItem x:Name="NewWindowMenuItem" Header="New window" Click="OnNewWindowClick" />
               <MenuItem Header="New Markdown tab" IsEnabled="False" />
@@ -414,44 +462,36 @@
               <MenuItem x:Name="SaveMenuItem" Header="Save" Click="OnSaveClick" />
               <MenuItem x:Name="SaveAsMenuItem" Header="Save as" Click="OnSaveAsClick" />
               <MenuItem x:Name="SaveAllMenuItem" Header="Save all" Click="OnSaveAllClick" />
-              <MenuItem Header="-" />
+              <Separator Classes="menuDivider" />
               <MenuItem Header="Page setup" Click="OnPageSetupClick" />
               <MenuItem x:Name="PrintMenuItem" Header="Print" Click="OnPrintClick" />
-              <MenuItem Header="-" />
+              <Separator Classes="menuDivider" />
               <MenuItem x:Name="CloseTabMenuItem" Header="Close tab" Click="OnCloseSelectedTabClick" />
               <MenuItem x:Name="CloseWindowMenuItem" Header="Close window" Click="OnCloseWindowClick" />
               <MenuItem Header="Exit" Click="OnExitClick" />
-            </MenuFlyout>
-          </Button.Flyout>
-        </Button>
-        <Button Classes="chrome menuCommand" Content="Edit">
-          <Button.Flyout>
-            <MenuFlyout Placement="BottomEdgeAlignedLeft" Opened="OnEditMenuOpened">
+        </MenuItem>
+        <MenuItem Header="Edit" SubmenuOpened="OnEditMenuOpened">
               <MenuItem x:Name="UndoMenuItem" Header="Undo" Click="OnUndoClick" />
-              <MenuItem Header="-" />
+              <Separator Classes="menuDivider" />
               <MenuItem x:Name="CutMenuItem" Header="Cut" Click="OnCutClick" />
               <MenuItem x:Name="CopyMenuItem" Header="Copy" Click="OnCopyClick" />
               <MenuItem x:Name="PasteMenuItem" Header="Paste" Click="OnPasteClick" />
               <MenuItem x:Name="DeleteMenuItem" Header="Delete" Click="OnDeleteClick" />
-              <MenuItem Header="-" />
+              <Separator Classes="menuDivider" />
               <MenuItem Header="Clear formatting" IsEnabled="False" />
-              <MenuItem Header="-" />
+              <Separator Classes="menuDivider" />
               <MenuItem x:Name="FindMenuItem" Header="Find" Click="OnFindClick" />
               <MenuItem x:Name="FindNextMenuItem" Header="Find next" Click="OnFindNextClick" />
               <MenuItem x:Name="FindPreviousMenuItem" Header="Find previous" Click="OnFindPreviousClick" />
               <MenuItem x:Name="ReplaceMenuItem" Header="Replace" Click="OnReplaceClick" />
               <MenuItem x:Name="GoToMenuItem" Header="Go to" Click="OnGoToClick" />
-              <MenuItem Header="-" />
+              <Separator Classes="menuDivider" />
               <MenuItem x:Name="SelectAllMenuItem" Header="Select all" Click="OnSelectAllClick" />
               <MenuItem x:Name="TimeDateMenuItem" Header="Time/Date" Click="OnTimeDateClick" />
-              <MenuItem Header="-" />
+              <Separator Classes="menuDivider" />
               <MenuItem Header="Font" Click="OnFontClick" />
-            </MenuFlyout>
-          </Button.Flyout>
-        </Button>
-        <Button Classes="chrome menuCommand" Content="View">
-          <Button.Flyout>
-            <MenuFlyout Placement="BottomEdgeAlignedLeft" Opened="OnViewMenuOpened">
+        </MenuItem>
+        <MenuItem Header="View" SubmenuOpened="OnViewMenuOpened">
               <MenuItem Header="Zoom">
                 <MenuItem x:Name="ZoomInMenuItem" Header="Zoom in" Click="OnZoomInClick" />
                 <MenuItem x:Name="ZoomOutMenuItem" Header="Zoom out" Click="OnZoomOutClick" />
@@ -470,10 +510,8 @@
               <MenuItem Header="Markdown" IsEnabled="False">
                 <MenuItem Header="Markdown options unavailable" IsEnabled="False" />
               </MenuItem>
-            </MenuFlyout>
-          </Button.Flyout>
-        </Button>
-      </StackPanel>
+        </MenuItem>
+      </Menu>
       <Button Grid.Column="1"
               Classes="chrome menuCommand"
               Width="36"
@@ -495,8 +533,7 @@
 
     <Border Grid.Row="1"
             Classes="editorSurface"
-            Padding="14,10"
-            Background="{DynamicResource NotepadEditorBrush}">
+            Padding="14,10">
     <avaloniaEdit:TextEditor x:Name="Editor"
                              Background="Transparent"
                              Foreground="{DynamicResource NotepadEditorForegroundBrush}"
@@ -505,7 +542,6 @@
                              VerticalScrollBarVisibility="Auto"
                              FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
                              FontSize="14"
-                             Watermark="Type something…"
                              AutomationProperties.Name="Text editor" />
     </Border>
 
@@ -513,8 +549,6 @@
             Classes="statusSurface"
             Grid.Row="2"
             Height="27"
-            Background="{DynamicResource NotepadStatusBrush}"
-            BorderBrush="{DynamicResource NotepadDividerBrush}"
             BorderThickness="0,1,0,0">
       <Grid Margin="12,0"
             ColumnDefinitions="*,Auto,Auto,Auto,Auto"
