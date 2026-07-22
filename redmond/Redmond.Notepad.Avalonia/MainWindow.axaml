@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="using:Redmond.Notepad.Avalonia"
         xmlns:shared="using:Redmond.Avalonia.Controls"
+        xmlns:avaloniaEdit="using:AvaloniaEdit"
         x:Class="Redmond.Notepad.Avalonia.MainWindow"
         Title="Untitled - Notepad"
         Width="900"
@@ -135,27 +136,6 @@
     </Style>
     <Style Selector="ListBox.tabStrip ListBoxItem:selected /template/ Path.inverseCorner">
       <Setter Property="IsVisible" Value="True" />
-    </Style>
-    <Style Selector="TextBox.editor">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="FocusAdorner" Value="{x:Null}" />
-    </Style>
-    <Style Selector="TextBox.editor:focus">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0" />
-    </Style>
-    <Style Selector="TextBox.editor /template/ Border#PART_BorderElement">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0" />
-    </Style>
-    <Style Selector="TextBox.editor:focus /template/ Border#PART_BorderElement">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0" />
     </Style>
   </Window.Styles>
 
@@ -381,19 +361,18 @@
     </Grid>
     </Border>
 
-    <Border Grid.Row="1" Background="{DynamicResource NotepadEditorBrush}">
-    <TextBox x:Name="Editor"
-             Classes="editor"
-             Padding="14,10"
-             AcceptsReturn="True"
-             AcceptsTab="True"
-             TextWrapping="Wrap"
-             HorizontalContentAlignment="Stretch"
-             VerticalContentAlignment="Stretch"
-             FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
-             FontSize="14"
-             PlaceholderText="Type something…"
-             AutomationProperties.Name="Text editor" />
+    <Border Grid.Row="1"
+            Padding="14,10"
+            Background="{DynamicResource NotepadEditorBrush}">
+    <avaloniaEdit:TextEditor x:Name="Editor"
+                             Background="Transparent"
+                             WordWrap="True"
+                             HorizontalScrollBarVisibility="Disabled"
+                             VerticalScrollBarVisibility="Auto"
+                             FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
+                             FontSize="14"
+                             Watermark="Type something…"
+                             AutomationProperties.Name="Text editor" />
     </Border>
 
     <Border Grid.Row="2"

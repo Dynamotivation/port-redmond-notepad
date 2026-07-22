@@ -2,7 +2,7 @@ namespace Redmond.Notepad.Core;
 
 public sealed class NotepadTab
 {
-    internal NotepadTab() => Document = new NotepadDocument();
+    internal NotepadTab(ITextBuffer buffer) => Document = new NotepadDocument(buffer);
 
     public Guid Id { get; } = Guid.NewGuid();
 
@@ -14,8 +14,13 @@ public sealed class NotepadTab
 public sealed class NotepadWorkspace
 {
     private readonly List<NotepadTab> _tabs = [];
+    private readonly ITextBufferFactory _textBufferFactory;
 
-    public NotepadWorkspace() => CreateTab();
+    public NotepadWorkspace(ITextBufferFactory? textBufferFactory = null)
+    {
+        _textBufferFactory = textBufferFactory ?? new StringTextBufferFactory();
+        CreateTab();
+    }
 
     public IReadOnlyList<NotepadTab> Tabs => _tabs;
 
@@ -23,7 +28,7 @@ public sealed class NotepadWorkspace
 
     public NotepadTab CreateTab()
     {
-        var tab = new NotepadTab();
+        var tab = new NotepadTab(_textBufferFactory.Create());
         _tabs.Add(tab);
         SelectedTab = tab;
         return tab;

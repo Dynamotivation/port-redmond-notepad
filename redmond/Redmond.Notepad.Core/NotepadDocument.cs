@@ -6,7 +6,14 @@ public sealed class NotepadDocument
 {
     public const string UntitledName = "Untitled";
 
-    public string Text { get; private set; } = string.Empty;
+    public NotepadDocument(ITextBuffer buffer)
+    {
+        Buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
+    }
+
+    public ITextBuffer Buffer { get; }
+
+    public string Text => Buffer.Text;
 
     public string DisplayName { get; private set; } = UntitledName;
 
@@ -14,15 +21,14 @@ public sealed class NotepadDocument
 
     public string LineEndingDisplayText => LineEndingUtility.GetLineEndingDisplayText(LineEnding);
 
-    public int CharacterCount => Text.Length;
+    public int CharacterCount => Buffer.Length;
 
-    public int LineCount => Text.Length == 0
-        ? 1
-        : Text.Count(character => character == '\n') + 1;
+    public int LineCount => Buffer.LineCount;
 
-    public void ReplaceText(string? text)
+    public void LoadText(string? text)
     {
-        Text = text ?? string.Empty;
-        LineEnding = LineEndingUtility.GetLineEndingTypeFromText(Text);
+        var loadedText = text ?? string.Empty;
+        LineEnding = LineEndingUtility.GetLineEndingTypeFromText(loadedText);
+        Buffer.Text = loadedText;
     }
 }

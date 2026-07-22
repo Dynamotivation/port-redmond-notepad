@@ -10,6 +10,7 @@ using System.ComponentModel;
 using Redmond.Avalonia.Controls;
 using Redmond.Avalonia.Windowing;
 using Redmond.Notepad.Core;
+using Redmond.Notepad.Editor.AvaloniaEdit;
 
 namespace Redmond.Notepad.Avalonia;
 
@@ -19,7 +20,7 @@ public partial class MainWindow : Window
     private const double TabScrollStep = 8;
     private const double TabScrollButtonWidth = 28;
 
-    private readonly NotepadWorkspace _workspace = new();
+    private readonly NotepadWorkspace _workspace;
     private readonly ObservableCollection<NotepadTabItem> _tabs = [];
     private readonly WindowAppearanceController _appearanceController;
     private WindowAppearanceOptions _appearance;
@@ -29,6 +30,7 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
+        _workspace = new NotepadWorkspace(new AvaloniaEditTextBufferFactory());
         InitializeComponent();
         _appearance = NotepadSettingsStore.LoadAppearance();
         _themePreference = NotepadSettingsStore.LoadThemePreference();
@@ -47,7 +49,7 @@ public partial class MainWindow : Window
         RefreshTabSeparators();
         UpdateWindowPresentation();
         Editor.TextChanged += OnEditorTextChanged;
-        Editor.PropertyChanged += OnEditorPropertyChanged;
+        Editor.TextArea.Caret.PositionChanged += OnCaretPositionChanged;
         Opened += OnOpened;
         PropertyChanged += OnWindowPropertyChanged;
         LoadSelectedTab();
@@ -270,8 +272,8 @@ public partial class MainWindow : Window
     private void LoadSelectedTab()
     {
         _isLoadingTab = true;
-        Editor.Text = _workspace.SelectedTab.Document.Text;
-        Editor.CaretIndex = Editor.Text?.Length ?? 0;
+        Editor.Document = GetEditorBuffer(_workspace.SelectedTab).Document;
+        Editor.CaretOffset = Editor.Document.TextLength;
         _isLoadingTab = false;
         Title = $"{_workspace.SelectedTab.Title} - Notepad";
         RefreshDocumentStatus();
@@ -303,25 +305,18 @@ public partial class MainWindow : Window
                 : dark ? "#202027" : "#F3F3F3"));
     }
 
-    private void OnEditorTextChanged(object? sender, TextChangedEventArgs e)
+    private void OnEditorTextChanged(object? sender, EventArgs e)
     {
         if (_isLoadingTab)
         {
             return;
         }
 
-        _workspace.SelectedTab.Document.ReplaceText(Editor.Text);
         RefreshDocumentStatus();
         RefreshCursorStatus();
     }
 
-    private void OnEditorPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
-    {
-        if (e.Property == TextBox.CaretIndexProperty)
-        {
-            RefreshCursorStatus();
-        }
-    }
+    private void OnCaretPositionChanged(object? sender, EventArgs e) => RefreshCursorStatus();
 
     private void RefreshDocumentStatus()
     {
@@ -334,26 +329,13 @@ public partial class MainWindow : Window
 
     private void RefreshCursorStatus()
     {
-        var text = Editor.Text ?? string.Empty;
-        var caret = Math.Clamp(Editor.CaretIndex, 0, text.Length);
-        var line = 1;
-        var column = 1;
-
-        for (var index = 0; index < caret; index++)
-        {
-            if (text[index] == '\n')
-            {
-                line++;
-                column = 1;
-            }
-            else
-            {
-                column++;
-            }
-        }
-
-        CursorStatus.Text = $"Ln {line}, Col {column}";
+        var position = _workspace.SelectedTab.Document.Buffer.GetPosition(Editor.CaretOffset);
+        CursorStatus.Text = $"Ln {position.Line}, Col {position.Column}";
     }
+
+    private static AvaloniaEditTextBuffer GetEditorBuffer(NotepadTab tab) =>
+        tab.Document.Buffer as AvaloniaEditTextBuffer
+        ?? throw new InvalidOperationException("The Avalonia frontend requires an AvaloniaEdit text buffer.");
 }
 
 internal sealed class NotepadTabItem(NotepadTab tab) : INotifyPropertyChanged
