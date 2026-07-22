@@ -25,6 +25,9 @@ public static class NotepadShortcutIds
     public const string GoTo = "edit.go-to";
     public const string SelectAll = "edit.select-all";
     public const string TimeDate = "edit.time-date";
+    public const string ZoomIn = "view.zoom-in";
+    public const string ZoomOut = "view.zoom-out";
+    public const string RestoreDefaultZoom = "view.restore-default-zoom";
 }
 
 public static class NotepadShortcutCatalog
@@ -58,6 +61,54 @@ public static class NotepadShortcutCatalog
         Create(NotepadShortcutIds.GoTo, "G", ShortcutModifiers.Control, "L", ShortcutModifiers.Command),
         Create(NotepadShortcutIds.SelectAll, "A", ShortcutModifiers.Control, "A", ShortcutModifiers.Command),
         Create(NotepadShortcutIds.TimeDate, "F5", ShortcutModifiers.None, "F5", ShortcutModifiers.None),
+        new ShortcutDefinition(
+            NotepadShortcutIds.ZoomIn,
+            new ShortcutGesture(ShortcutKey.Named("OemPlus"), ShortcutModifiers.Control),
+            new Dictionary<ShortcutPlatform, ShortcutGesture>
+            {
+                [ShortcutPlatform.MacOS] = new(ShortcutKey.Named("OemPlus"), ShortcutModifiers.Command),
+            },
+            alternateGestures:
+            [
+                new ShortcutGesture(
+                    ShortcutKey.Named("OemPlus"),
+                    ShortcutModifiers.Control | ShortcutModifiers.Shift),
+                new ShortcutGesture(ShortcutKey.Named("NumPadAdd"), ShortcutModifiers.Control),
+            ],
+            platformAlternateGestures: new Dictionary<ShortcutPlatform, IReadOnlyList<ShortcutGesture>>
+            {
+                [ShortcutPlatform.MacOS] =
+                [
+                    new ShortcutGesture(
+                        ShortcutKey.Named("OemPlus"),
+                        ShortcutModifiers.Command | ShortcutModifiers.Shift),
+                    new ShortcutGesture(ShortcutKey.Named("NumPadAdd"), ShortcutModifiers.Command),
+                ],
+            }),
+        new ShortcutDefinition(
+            NotepadShortcutIds.ZoomOut,
+            new ShortcutGesture(ShortcutKey.Named("OemMinus"), ShortcutModifiers.Control),
+            new Dictionary<ShortcutPlatform, ShortcutGesture>
+            {
+                [ShortcutPlatform.MacOS] = new(ShortcutKey.Named("OemMinus"), ShortcutModifiers.Command),
+            },
+            alternateGestures:
+            [
+                new ShortcutGesture(ShortcutKey.Named("NumPadSubtract"), ShortcutModifiers.Control),
+            ],
+            platformAlternateGestures: new Dictionary<ShortcutPlatform, IReadOnlyList<ShortcutGesture>>
+            {
+                [ShortcutPlatform.MacOS] =
+                [
+                    new ShortcutGesture(ShortcutKey.Named("NumPadSubtract"), ShortcutModifiers.Command),
+                ],
+            }),
+        Create(
+            NotepadShortcutIds.RestoreDefaultZoom,
+            "D0",
+            ShortcutModifiers.Control,
+            "D0",
+            ShortcutModifiers.Command),
     ];
 
     private static ShortcutDefinition Create(

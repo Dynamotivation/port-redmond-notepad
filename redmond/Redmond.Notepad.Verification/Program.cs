@@ -117,6 +117,31 @@ static void VerifyShortcutConventions()
             $"Windows {shortcutId} must display as {expectedGesture}");
     }
 
+    Assert(windows.IsMatch(
+            NotepadShortcutIds.ZoomIn,
+            new ShortcutInput(new ShortcutGesture(
+                ShortcutKey.Named("OemPlus"),
+                ShortcutModifiers.Control | ShortcutModifiers.Shift))),
+        "Windows Zoom in must accept the shifted plus key");
+    Assert(windows.IsMatch(
+            NotepadShortcutIds.ZoomOut,
+            new ShortcutInput(new ShortcutGesture(
+                ShortcutKey.Named("NumPadSubtract"),
+                ShortcutModifiers.Control))),
+        "Windows Zoom out must accept the numeric-keypad minus key");
+    Assert(macOS.IsMatch(
+            NotepadShortcutIds.ZoomIn,
+            new ShortcutInput(new ShortcutGesture(
+                ShortcutKey.Named("OemPlus"),
+                ShortcutModifiers.Command | ShortcutModifiers.Shift))),
+        "macOS Zoom in must use Command and accept the shifted plus key");
+    Assert(macOS.IsMatch(
+            NotepadShortcutIds.RestoreDefaultZoom,
+            new ShortcutInput(new ShortcutGesture(
+                ShortcutKey.Named("D0"),
+                ShortcutModifiers.Command))),
+        "macOS Restore default zoom must use Command+0");
+
     Assert(windows.GetConflicts().Count == 0 && macOS.GetConflicts().Count == 0,
         "Notepad shortcut catalogs must not contain duplicate active gestures");
     Assert(macOS.ValidateConventions().All(issue => issue.Severity != ShortcutConventionSeverity.Error),
