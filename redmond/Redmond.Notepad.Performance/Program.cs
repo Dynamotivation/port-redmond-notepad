@@ -16,6 +16,38 @@ var source = sourceBuilder.ToString(0, targetCharacters);
 var expectedLineCount = source.Count(character => character == '\n') + 1;
 var factory = new AvaloniaEditTextBufferFactory();
 
+var undoBuffer = (AvaloniaEditTextBuffer)factory.Create("saved");
+undoBuffer.MarkAsOriginal();
+undoBuffer.Replace(undoBuffer.Length, 0, " change");
+if (!undoBuffer.IsModified)
+{
+    throw new InvalidOperationException("Editing an original document did not mark it as modified.");
+}
+
+undoBuffer.Document.UndoStack.Undo();
+if (undoBuffer.IsModified || undoBuffer.Text != "saved")
+{
+    throw new InvalidOperationException("Undoing back to the save point did not restore the original state.");
+}
+
+var commandBuffer = (AvaloniaEditTextBuffer)factory.Create("typed text");
+commandBuffer.MarkAsOriginal();
+commandBuffer.Document.UndoStack.StartUndoGroup();
+try
+{
+    commandBuffer.Replace(commandBuffer.Length, 0, " timestamp");
+}
+finally
+{
+    commandBuffer.Document.UndoStack.EndUndoGroup();
+}
+
+commandBuffer.Document.UndoStack.Undo();
+if (commandBuffer.IsModified || commandBuffer.Text != "typed text")
+{
+    throw new InvalidOperationException("A grouped Edit command did not undo independently to the save point.");
+}
+
 var construction = Stopwatch.StartNew();
 var buffer = factory.Create(source);
 construction.Stop();

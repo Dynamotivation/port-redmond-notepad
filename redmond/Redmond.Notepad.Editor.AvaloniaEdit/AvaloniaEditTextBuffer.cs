@@ -5,16 +5,10 @@ namespace Redmond.Notepad.Editor.AvaloniaEdit;
 
 public sealed class AvaloniaEditTextBuffer : ITextBuffer
 {
-    private bool _isModified;
-
     public AvaloniaEditTextBuffer(string initialText = "")
     {
         Document = new TextDocument(initialText ?? string.Empty);
-        Document.Changed += (_, _) =>
-        {
-            _isModified = true;
-            Changed?.Invoke(this, EventArgs.Empty);
-        };
+        Document.Changed += (_, _) => Changed?.Invoke(this, EventArgs.Empty);
     }
 
     public event EventHandler? Changed;
@@ -25,7 +19,7 @@ public sealed class AvaloniaEditTextBuffer : ITextBuffer
 
     public int LineCount => Document.LineCount;
 
-    public bool IsModified => _isModified;
+    public bool IsModified => !Document.UndoStack.IsOriginalFile;
 
     public string Text
     {
@@ -39,6 +33,8 @@ public sealed class AvaloniaEditTextBuffer : ITextBuffer
         return new TextPosition(location.Line, location.Column);
     }
 
+    public string GetText(int offset, int length) => Document.GetText(offset, length);
+
     public TextReader CreateReader() => Document.CreateReader();
 
     public ITextSnapshot CreateSnapshot() => new AvaloniaEditTextSnapshot(Document.CreateSnapshot());
@@ -50,7 +46,6 @@ public sealed class AvaloniaEditTextBuffer : ITextBuffer
 
     public void MarkAsOriginal()
     {
-        _isModified = false;
         Document.UndoStack.MarkAsOriginalFile();
     }
 

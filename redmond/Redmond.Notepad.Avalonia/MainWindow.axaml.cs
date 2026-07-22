@@ -99,6 +99,9 @@ public partial class MainWindow : Window
     }
 
     private void OnSettingsClick(object? sender, RoutedEventArgs e)
+        => ShowSettingsPage();
+
+    private void ShowSettingsPage()
     {
         SettingsPage.SetAppearance(_appearance);
         SettingsPage.SetThemePreference(_themePreference);
@@ -382,6 +385,213 @@ public partial class MainWindow : Window
     private void OnPageSetupClick(object? sender, RoutedEventArgs e) =>
         ShowUnavailableFeature("Page setup");
 
+    private void OnEditMenuOpened(object? sender, EventArgs e)
+    {
+        UndoMenuItem.IsEnabled = Editor.CanUndo;
+        CutMenuItem.IsEnabled = Editor.CanCut;
+        CopyMenuItem.IsEnabled = Editor.CanCopy;
+        PasteMenuItem.IsEnabled = Editor.CanPaste;
+        DeleteMenuItem.IsEnabled = Editor.CanDelete;
+        FindMenuItem.IsEnabled = Editor.CanSearch;
+        FindNextMenuItem.IsEnabled = Editor.CanSearch;
+        FindPreviousMenuItem.IsEnabled = Editor.CanSearch;
+        ReplaceMenuItem.IsEnabled = Editor.CanSearch;
+        GoToMenuItem.IsEnabled = Editor.Document?.LineCount > 0;
+        SelectAllMenuItem.IsEnabled = Editor.CanSelectAll;
+    }
+
+    private NotepadDocument? GetSelectedDocument() =>
+        TabsList.SelectedItem is NotepadTabItem item ? item.Tab.Document : null;
+
+    private void OnUndoClick(object? sender, RoutedEventArgs e)
+    {
+        UndoEditor();
+    }
+
+    private void OnCutClick(object? sender, RoutedEventArgs e)
+    {
+        CutEditor();
+    }
+
+    private void OnCopyClick(object? sender, RoutedEventArgs e)
+    {
+        Editor.Copy();
+        Editor.Focus();
+    }
+
+    private void OnPasteClick(object? sender, RoutedEventArgs e)
+    {
+        PasteEditor();
+    }
+
+    private void OnDeleteClick(object? sender, RoutedEventArgs e)
+    {
+        DeleteEditor();
+    }
+
+    private void UndoEditor()
+    {
+        Editor.Undo();
+        RefreshAfterEditorCommand();
+    }
+
+    private void CutEditor()
+    {
+        Editor.Cut();
+        RefreshAfterEditorCommand();
+    }
+
+    private void PasteEditor()
+    {
+        Editor.Paste();
+        RefreshAfterEditorCommand();
+    }
+
+    private void DeleteEditor()
+    {
+        Editor.Delete();
+        RefreshAfterEditorCommand();
+    }
+
+    private void OnFindClick(object? sender, RoutedEventArgs e) => ShowFindAndReplace(showReplace: false);
+
+    private void OnReplaceClick(object? sender, RoutedEventArgs e) => ShowFindAndReplace(showReplace: true);
+
+    private void ShowFindAndReplace(bool showReplace)
+    {
+        var searchPanel = Editor.SearchPanel;
+        searchPanel.IsReplaceMode = showReplace;
+        var searchText = GetSelectedDocument() is { } document
+            ? NotepadEditLogic.GetSearchText(document.Buffer, Editor.SelectionStart, Editor.SelectionLength)
+            : string.Empty;
+        if (searchText.Length > 0)
+        {
+            searchPanel.SearchPattern = searchText;
+        }
+
+        searchPanel.Open();
+        searchPanel.Reactivate();
+    }
+
+    private void OnFindNextClick(object? sender, RoutedEventArgs e) => FindNext();
+
+    private void FindNext()
+    {
+        var searchPanel = Editor.SearchPanel;
+        if (string.IsNullOrEmpty(searchPanel.SearchPattern))
+        {
+            ShowFindAndReplace(showReplace: false);
+            return;
+        }
+
+        searchPanel.FindNext(Editor.SelectionStart + Editor.SelectionLength);
+        Editor.Focus();
+    }
+
+    private void OnFindPreviousClick(object? sender, RoutedEventArgs e) => FindPrevious();
+
+    private void FindPrevious()
+    {
+        var searchPanel = Editor.SearchPanel;
+        if (string.IsNullOrEmpty(searchPanel.SearchPattern))
+        {
+            ShowFindAndReplace(showReplace: false);
+            return;
+        }
+
+        searchPanel.FindPrevious();
+        Editor.Focus();
+    }
+
+    private void OnGoToClick(object? sender, RoutedEventArgs e) => ShowGoTo();
+
+    private void ShowGoTo()
+    {
+        var document = GetSelectedDocument();
+        if (document is null)
+        {
+            return;
+        }
+
+        var currentLine = document.Buffer.GetPosition(Editor.TextArea.Caret.Offset).Line;
+        GoToLineRangeText.Text = $"Line number (1–{document.LineCount})";
+        GoToLineTextBox.Text = currentLine.ToString();
+        GoToOverlay.IsVisible = true;
+        GoToLineTextBox.Focus();
+        GoToLineTextBox.SelectAll();
+    }
+
+    private void OnConfirmGoToClick(object? sender, RoutedEventArgs e) => ConfirmGoTo();
+
+    private void ConfirmGoTo()
+    {
+        var lineCount = Editor.Document?.LineCount ?? 0;
+        if (!int.TryParse(GoToLineTextBox.Text, out var lineNumber)
+            || lineNumber < 1
+            || lineNumber > lineCount)
+        {
+            GoToLineRangeText.Text = $"Enter a line from 1 through {lineCount}.";
+            GoToLineTextBox.Focus();
+            GoToLineTextBox.SelectAll();
+            return;
+        }
+
+        var line = Editor.Document!.GetLineByNumber(lineNumber);
+        Editor.SelectionLength = 0;
+        Editor.SelectionStart = line.Offset;
+        Editor.TextArea.Caret.Offset = line.Offset;
+        Editor.ScrollToLine(lineNumber);
+        CloseGoTo();
+    }
+
+    private void OnCancelGoToClick(object? sender, RoutedEventArgs e) => CloseGoTo();
+
+    private void CloseGoTo()
+    {
+        GoToOverlay.IsVisible = false;
+        Editor.Focus();
+    }
+
+    private void OnSelectAllClick(object? sender, RoutedEventArgs e)
+    {
+        Editor.SelectAll();
+        Editor.Focus();
+    }
+
+    private void OnTimeDateClick(object? sender, RoutedEventArgs e) => InsertTimeDate();
+
+    private void InsertTimeDate()
+    {
+        var document = GetSelectedDocument();
+        if (document is null)
+        {
+            return;
+        }
+
+        var text = NotepadEditLogic.GetDateTimeText();
+        var insertionStart = Editor.SelectionStart;
+        var undoStack = Editor.Document!.UndoStack;
+        undoStack.StartUndoGroup();
+        try
+        {
+            document.Buffer.Replace(insertionStart, Editor.SelectionLength, text);
+        }
+        finally
+        {
+            undoStack.EndUndoGroup();
+        }
+
+        Editor.SelectionLength = 0;
+        Editor.SelectionStart = insertionStart + text.Length;
+        RefreshAfterEditorCommand();
+    }
+
+    private void OnFontClick(object? sender, RoutedEventArgs e)
+    {
+        ShowSettingsPage();
+        SettingsPage.ShowFontSettings();
+    }
+
     private void OnPrintClick(object? sender, RoutedEventArgs e) =>
         ShowUnavailableFeature("Printing");
 
@@ -417,6 +627,18 @@ public partial class MainWindow : Window
         Apply(PrintMenuItem, NotepadShortcutIds.Print);
         Apply(CloseTabMenuItem, NotepadShortcutIds.CloseTab);
         Apply(CloseWindowMenuItem, NotepadShortcutIds.CloseWindow);
+        Apply(UndoMenuItem, NotepadShortcutIds.Undo);
+        Apply(CutMenuItem, NotepadShortcutIds.Cut);
+        Apply(CopyMenuItem, NotepadShortcutIds.Copy);
+        Apply(PasteMenuItem, NotepadShortcutIds.Paste);
+        Apply(DeleteMenuItem, NotepadShortcutIds.Delete);
+        Apply(FindMenuItem, NotepadShortcutIds.Find);
+        Apply(FindNextMenuItem, NotepadShortcutIds.FindNext);
+        Apply(FindPreviousMenuItem, NotepadShortcutIds.FindPrevious);
+        Apply(ReplaceMenuItem, NotepadShortcutIds.Replace);
+        Apply(GoToMenuItem, NotepadShortcutIds.GoTo);
+        Apply(SelectAllMenuItem, NotepadShortcutIds.SelectAll);
+        Apply(TimeDateMenuItem, NotepadShortcutIds.TimeDate);
         return;
 
         void Apply(MenuItem item, string shortcutId) =>
@@ -425,6 +647,22 @@ public partial class MainWindow : Window
 
     private async void OnNotepadKeyDown(object? sender, KeyEventArgs e)
     {
+        if (GoToOverlay.IsVisible)
+        {
+            if (e.Key == Key.Escape)
+            {
+                CloseGoTo();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Enter)
+            {
+                ConfirmGoTo();
+                e.Handled = true;
+            }
+
+            return;
+        }
+
         if (UnsavedChangesOverlay.IsVisible
             || ExternalChangesOverlay.IsVisible
             || SettingsPage.IsVisible
@@ -471,6 +709,42 @@ public partial class MainWindow : Window
                 break;
             case NotepadShortcutIds.CloseWindow:
                 Close();
+                break;
+            case NotepadShortcutIds.Undo:
+                UndoEditor();
+                break;
+            case NotepadShortcutIds.Cut:
+                CutEditor();
+                break;
+            case NotepadShortcutIds.Copy:
+                Editor.Copy();
+                break;
+            case NotepadShortcutIds.Paste:
+                PasteEditor();
+                break;
+            case NotepadShortcutIds.Delete:
+                DeleteEditor();
+                break;
+            case NotepadShortcutIds.Find:
+                ShowFindAndReplace(showReplace: false);
+                break;
+            case NotepadShortcutIds.FindNext:
+                FindNext();
+                break;
+            case NotepadShortcutIds.FindPrevious:
+                FindPrevious();
+                break;
+            case NotepadShortcutIds.Replace:
+                ShowFindAndReplace(showReplace: true);
+                break;
+            case NotepadShortcutIds.GoTo:
+                ShowGoTo();
+                break;
+            case NotepadShortcutIds.SelectAll:
+                Editor.SelectAll();
+                break;
+            case NotepadShortcutIds.TimeDate:
+                InsertTimeDate();
                 break;
         }
     }
@@ -875,12 +1149,22 @@ public partial class MainWindow : Window
             return;
         }
 
+        RefreshAfterEditorCommand(focusEditor: false);
+    }
+
+    private void RefreshAfterEditorCommand(bool focusEditor = true)
+    {
         RefreshDocumentStatus();
         RefreshCursorStatus();
         UpdateDocumentTitle();
         if (TabsList.SelectedItem is NotepadTabItem item)
         {
             item.RefreshTitle();
+        }
+
+        if (focusEditor)
+        {
+            Editor.Focus();
         }
     }
 

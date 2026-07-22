@@ -23,7 +23,8 @@
     </Style>
   </UserControl.Styles>
 
-  <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+  <ScrollViewer x:Name="SettingsScrollViewer"
+                HorizontalScrollBarVisibility="Disabled"
                 VerticalScrollBarVisibility="Auto"
                 Background="Transparent">
     <Grid x:Name="SettingsLayout"
@@ -56,7 +57,8 @@
         <shared:WindowAppearanceSettingsPanel x:Name="WindowAppearancePanel" />
 
         <TextBlock Classes="sectionHeading" Text="Text Formatting" />
-        <shared:AnimatedSettingsExpander Header="Font"
+        <shared:AnimatedSettingsExpander x:Name="FontSettingsExpander"
+                                         Header="Font"
                                          Description="Choose the editor font, style, and size">
           <shared:AnimatedSettingsExpander.Icon>
             <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"

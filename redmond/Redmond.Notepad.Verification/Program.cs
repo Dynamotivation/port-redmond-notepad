@@ -43,6 +43,7 @@ try
     await VerifyExternalChangeProtectionAsync(store, verificationDirectory);
 
     VerifyUntitledPreview();
+    VerifyPortableEditLogic();
     VerifyShortcutConventions();
 
     Console.WriteLine("Core file verification: passed");
@@ -86,10 +87,37 @@ static void VerifyShortcutConventions()
         "macOS new-window shortcut must follow the native document-window convention");
     Assert(macOS.GetGestureDisplayText(NotepadShortcutIds.SaveAll) == "⌥⌘S",
         "macOS Save All must avoid Windows Control/Alt semantics");
+    Assert(windows.GetGestureDisplayText(NotepadShortcutIds.FindNext) == "F3",
+        "Windows Find next must preserve the reference Notepad binding");
+    Assert(macOS.GetGestureDisplayText(NotepadShortcutIds.FindNext) == "⌘G",
+        "macOS Find next must use the native application convention");
+    Assert(windows.GetGestureDisplayText(NotepadShortcutIds.Replace) == "Ctrl+H",
+        "Windows Replace must preserve the reference Notepad binding");
+    Assert(macOS.GetGestureDisplayText(NotepadShortcutIds.Replace) == "⌥⌘F",
+        "macOS Replace must avoid the browser-history Command+Shift+H convention");
     Assert(windows.GetConflicts().Count == 0 && macOS.GetConflicts().Count == 0,
         "Notepad shortcut catalogs must not contain duplicate active gestures");
     Assert(macOS.ValidateConventions().All(issue => issue.Severity != ShortcutConventionSeverity.Error),
         "macOS shortcut catalog must avoid reserved or conflicting system gestures");
+}
+
+static void VerifyPortableEditLogic()
+{
+    var buffer = new StringTextBuffer("alpha beta\r\ngamma");
+    Assert(NotepadEditLogic.GetSearchText(buffer, 7, 0) == "beta",
+        "Find must seed from the word under the caret, matching upstream Notepads");
+    Assert(NotepadEditLogic.GetSearchText(buffer, 0, 5) == "alpha",
+        "Find must seed from the current single-line selection");
+    Assert(NotepadEditLogic.GetSearchText(buffer, 0, 13) == string.Empty,
+        "Find must not seed from a multiline selection");
+    Assert(NotepadEditLogic.GetSearchText(buffer, 5, 0) == string.Empty,
+        "Find must not infer a word when the caret is on punctuation or whitespace");
+
+    var culture = System.Globalization.CultureInfo.GetCultureInfo("en-US");
+    var instant = new DateTime(2026, 7, 22, 16, 42, 3);
+    Assert(
+        NotepadEditLogic.GetDateTimeText(instant, culture) == instant.ToString(culture),
+        "Time/Date must use the current-culture DateTime format from upstream Notepads");
 }
 
 static async Task VerifyExternalChangeProtectionAsync(

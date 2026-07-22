@@ -16,6 +16,8 @@ public interface ITextBuffer
 
     string Text { get; set; }
 
+    string GetText(int offset, int length);
+
     TextPosition GetPosition(int offset);
 
     TextReader CreateReader();

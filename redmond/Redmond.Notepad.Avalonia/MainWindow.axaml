@@ -365,7 +365,29 @@
             </MenuFlyout>
           </Button.Flyout>
         </Button>
-        <Button Classes="chrome" Content="Edit" />
+        <Button Classes="chrome" Content="Edit">
+          <Button.Flyout>
+            <MenuFlyout Placement="BottomEdgeAlignedLeft" Opened="OnEditMenuOpened">
+              <MenuItem x:Name="UndoMenuItem" Header="Undo" Click="OnUndoClick" />
+              <MenuItem Header="-" />
+              <MenuItem x:Name="CutMenuItem" Header="Cut" Click="OnCutClick" />
+              <MenuItem x:Name="CopyMenuItem" Header="Copy" Click="OnCopyClick" />
+              <MenuItem x:Name="PasteMenuItem" Header="Paste" Click="OnPasteClick" />
+              <MenuItem x:Name="DeleteMenuItem" Header="Delete" Click="OnDeleteClick" />
+              <MenuItem Header="-" />
+              <MenuItem x:Name="FindMenuItem" Header="Find" Click="OnFindClick" />
+              <MenuItem x:Name="FindNextMenuItem" Header="Find next" Click="OnFindNextClick" />
+              <MenuItem x:Name="FindPreviousMenuItem" Header="Find previous" Click="OnFindPreviousClick" />
+              <MenuItem x:Name="ReplaceMenuItem" Header="Replace" Click="OnReplaceClick" />
+              <MenuItem x:Name="GoToMenuItem" Header="Go to" Click="OnGoToClick" />
+              <MenuItem Header="-" />
+              <MenuItem x:Name="SelectAllMenuItem" Header="Select all" Click="OnSelectAllClick" />
+              <MenuItem x:Name="TimeDateMenuItem" Header="Time/Date" Click="OnTimeDateClick" />
+              <MenuItem Header="-" />
+              <MenuItem Header="Font" Click="OnFontClick" />
+            </MenuFlyout>
+          </Button.Flyout>
+        </Button>
         <Button Classes="chrome" Content="View" />
       </StackPanel>
       <Button Grid.Column="1"
@@ -515,6 +537,38 @@
           <Button x:Name="OverwriteExternalChangesButton"
                   Content="Overwrite"
                   Click="OnOverwriteExternalChangesClick" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </Border>
+
+  <Border x:Name="GoToOverlay"
+          ZIndex="22"
+          IsVisible="False"
+          Background="#66000000">
+    <Border Width="360"
+            Padding="24"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Background="{DynamicResource NotepadEditorBrush}"
+            BorderBrush="{DynamicResource NotepadDividerBrush}"
+            BorderThickness="1"
+            CornerRadius="8">
+      <StackPanel Spacing="14">
+        <TextBlock FontSize="20"
+                   FontWeight="SemiBold"
+                   Text="Go to line" />
+        <TextBlock x:Name="GoToLineRangeText"
+                   Opacity="0.72"
+                   Text="Line number" />
+        <TextBox x:Name="GoToLineTextBox"
+                 AutomationProperties.Name="Line number" />
+        <StackPanel Margin="0,8,0,0"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Spacing="8">
+          <Button Content="Cancel" Click="OnCancelGoToClick" />
+          <Button Content="Go to" Click="OnConfirmGoToClick" />
         </StackPanel>
       </StackPanel>
     </Border>

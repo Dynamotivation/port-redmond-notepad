@@ -7,9 +7,15 @@ internal static class AvaloniaShortcutAdapter
 {
     public static bool TryCreateInput(KeyEventArgs args, out ShortcutInput input)
     {
-        var keyName = args.Key is >= Key.A and <= Key.Z
-            ? args.Key.ToString().ToUpperInvariant()
-            : string.Empty;
+        var keyName = args.Key.ToString().ToUpperInvariant();
+        if (args.Key is Key.None
+            or Key.LeftCtrl or Key.RightCtrl
+            or Key.LeftAlt or Key.RightAlt
+            or Key.LeftShift or Key.RightShift
+            or Key.LWin or Key.RWin)
+        {
+            keyName = string.Empty;
+        }
         if (keyName.Length == 0)
         {
             input = default;

@@ -33,6 +33,13 @@ public partial class SettingsPage : UserControl
         _isUpdatingTheme = false;
     }
 
+    public void ShowFontSettings()
+    {
+        FontSettingsExpander.IsExpanded = true;
+        FontSettingsExpander.BringIntoView();
+        FontSettingsExpander.Focus();
+    }
+
     private void OnThemeChecked(object? sender, RoutedEventArgs e)
     {
         if (_isUpdatingTheme)

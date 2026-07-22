@@ -87,6 +87,18 @@ public sealed class StringTextBuffer(string initialText = "") : ITextBuffer
         return new TextPosition(line, column);
     }
 
+    public string GetText(int offset, int length)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(offset);
+        ArgumentOutOfRangeException.ThrowIfNegative(length);
+        if (offset > _text.Length || length > _text.Length - offset)
+        {
+            throw new ArgumentOutOfRangeException(nameof(length));
+        }
+
+        return _text.Substring(offset, length);
+    }
+
     public TextReader CreateReader() => new StringReader(_text);
 
     public ITextSnapshot CreateSnapshot() => new StringTextSnapshot(_text);
