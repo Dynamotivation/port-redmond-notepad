@@ -21,7 +21,6 @@ namespace Redmond.Notepad.Avalonia;
 
 public partial class MainWindow : Window
 {
-    private const double TabCornerOverhangWidth = 16;
     private const double MaximumTabWidth = 228;
     private const double MinimumTabWidth = 80;
     private const double TabWidthReductionFactor = 0.75;
@@ -1456,8 +1455,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        var tabStart = selectedIndex * CurrentTabLayoutWidth;
-        var tabEnd = tabStart + CurrentTabLayoutWidth;
+        var tabStart = selectedIndex * CurrentTabWidth;
+        var tabEnd = tabStart + CurrentTabWidth;
         var offset = TabScrollViewer.Offset.X;
 
         if (tabStart < offset)
@@ -1476,15 +1475,13 @@ public partial class MainWindow : Window
 
     private double CurrentTabWidth => TabWidthSteps[_tabWidthStep];
 
-    private double CurrentTabLayoutWidth => CurrentTabWidth + TabCornerOverhangWidth;
-
-    private NotepadTabItem CreateTabItem(NotepadTab tab) => new(tab, CurrentTabLayoutWidth);
+    private NotepadTabItem CreateTabItem(NotepadTab tab) => new(tab, CurrentTabWidth);
 
     private void ApplyCurrentTabWidth()
     {
         foreach (var tab in _tabs)
         {
-            tab.LayoutWidth = CurrentTabLayoutWidth;
+            tab.LayoutWidth = CurrentTabWidth;
         }
     }
 
