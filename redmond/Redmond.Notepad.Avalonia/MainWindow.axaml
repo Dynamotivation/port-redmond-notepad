@@ -264,7 +264,7 @@
             ColumnDefinitions="Auto,*"
             Margin="8,0,0,0">
         <Grid Width="37" Height="37">
-          <Image Width="22"
+          <Image Width="20"
                  Height="22"
                  Stretch="Uniform"
                  IsHitTestVisible="False"
@@ -272,7 +272,12 @@
                  VerticalAlignment="Center"
                  Source="avares://Redmond%20Notepad/Assets/RedmondNotepadIcon.png" />
         </Grid>
-        <Grid Grid.Column="1" ColumnDefinitions="Auto,*,Auto">
+        <Grid x:Name="TabBarArea"
+              Grid.Column="1"
+              SizeChanged="OnTabBarSizeChanged">
+          <Grid x:Name="TabBarControls"
+                HorizontalAlignment="Left"
+                ColumnDefinitions="Auto,*,Auto,Auto">
           <RepeatButton x:Name="TabScrollLeftButton"
                         Classes="chrome tabChevron"
                         Width="28"
@@ -283,7 +288,8 @@
                         Delay="280"
                         Interval="16"
                         Click="OnTabScrollLeftClick"
-                        AutomationProperties.Name="Scroll tabs left">
+                        ToolTip.Tip="Scroll tab list backward"
+                        AutomationProperties.Name="Scroll tab list backward">
             <Path Width="8" Height="12" Stretch="Fill"
                   Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RepeatButton}}"
                   StrokeThickness="1.4" StrokeLineCap="Round"
@@ -298,8 +304,7 @@
                         VerticalScrollBarVisibility="Disabled"
                         IsScrollChainingEnabled="False"
                         ScrollChanged="OnTabScrollChanged">
-            <StackPanel Orientation="Horizontal">
-              <ListBox x:Name="TabsList"
+            <ListBox x:Name="TabsList"
                        Classes="tabStrip"
                        Height="37"
                        HorizontalAlignment="Left"
@@ -312,7 +317,7 @@
                 </ListBox.ItemsPanel>
                 <ListBox.ItemTemplate>
                   <DataTemplate x:CompileBindings="False">
-                    <Grid Width="210" Height="37" ColumnDefinitions="*,34">
+                    <Grid Width="{Binding LayoutWidth}" Height="37" ColumnDefinitions="*,34">
                       <TextBlock Margin="12,0,4,0"
                                  VerticalAlignment="Center"
                                  TextTrimming="CharacterEllipsis"
@@ -326,6 +331,7 @@
                               VerticalContentAlignment="Center"
                               CommandParameter="{Binding}"
                               Click="OnCloseTabClick"
+                              ToolTip.Tip="{DynamicResource CloseTabToolTip}"
                               AutomationProperties.Name="Close tab">
                         <Grid>
                           <Path Width="10"
@@ -364,28 +370,6 @@
                   </DataTemplate>
                 </ListBox.ItemTemplate>
               </ListBox>
-
-              <Grid Width="37" Height="37">
-                <Button Classes="chrome tabGlyph"
-                        Width="28"
-                        Height="28"
-                        Padding="0"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        HorizontalContentAlignment="Center"
-                        VerticalContentAlignment="Center"
-                        Click="OnNewTabClick"
-                        AutomationProperties.Name="New tab">
-                  <Path Width="12"
-                        Height="12"
-                        Stretch="Uniform"
-                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
-                        StrokeThickness="1.4"
-                        StrokeLineCap="Round"
-                        Data="M 6,0 L 6,12 M 0,6 L 12,6" />
-                </Button>
-              </Grid>
-            </StackPanel>
           </ScrollViewer>
 
           <RepeatButton x:Name="TabScrollRightButton"
@@ -399,12 +383,36 @@
                         Delay="280"
                         Interval="16"
                         Click="OnTabScrollRightClick"
-                        AutomationProperties.Name="Scroll tabs right">
+                        ToolTip.Tip="Scroll tab list forward"
+                        AutomationProperties.Name="Scroll tab list forward">
             <Path Width="8" Height="12" Stretch="Fill"
                   Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RepeatButton}}"
                   StrokeThickness="1.4" StrokeLineCap="Round"
                   Data="M 1,1 L 6,6 L 1,11" />
           </RepeatButton>
+
+          <Grid Grid.Column="3" Width="37" Height="37">
+            <Button Classes="chrome tabGlyph"
+                    Width="28"
+                    Height="28"
+                    Padding="0"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    HorizontalContentAlignment="Center"
+                    VerticalContentAlignment="Center"
+                    Click="OnNewTabClick"
+                    ToolTip.Tip="{DynamicResource NewTabToolTip}"
+                    AutomationProperties.Name="New tab">
+              <Path Width="12"
+                    Height="12"
+                    Stretch="Uniform"
+                    Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                    StrokeThickness="1.4"
+                    StrokeLineCap="Round"
+                    Data="M 6,0 L 6,12 M 0,6 L 12,6" />
+            </Button>
+          </Grid>
+          </Grid>
         </Grid>
       </Grid>
     </Grid>
