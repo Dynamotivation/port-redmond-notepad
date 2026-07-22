@@ -24,7 +24,6 @@ public partial class MainWindow : Window
     private const double TabWidth = 210;
     private const double TabScrollStep = 8;
     private const double TabScrollButtonWidth = 28;
-    private const double BaseEditorFontSize = 14;
     private const double ZoomStep = 10;
 
     private readonly NotepadWorkspace _workspace;
@@ -39,6 +38,7 @@ public partial class MainWindow : Window
     private WindowAppearanceOptions _appearance;
     private NotepadPageSettings _pageSettings = new();
     private NotepadViewOptions _viewOptions;
+    private NotepadFontOptions _fontOptions;
     private AppThemePreference _themePreference;
     private bool _recentFilesEnabled;
     private bool _isLoadingTab;
@@ -73,6 +73,7 @@ public partial class MainWindow : Window
         _appearance = NotepadSettingsStore.LoadAppearance();
         _themePreference = NotepadSettingsStore.LoadThemePreference();
         _viewOptions = NotepadSettingsStore.LoadViewOptions();
+        _fontOptions = NotepadSettingsStore.LoadFontOptions();
         _recentFiles = NotepadSettingsStore.LoadRecentFiles();
         _recentFilesEnabled = NotepadSettingsStore.LoadRecentFilesEnabled();
         _appearanceController = WindowAppearanceController.Attach(this, WindowSurface, _appearance);
@@ -80,9 +81,14 @@ public partial class MainWindow : Window
         SettingsPage.SetAppearance(_appearance);
         SettingsPage.SetThemePreference(_themePreference);
         SettingsPage.SetRecentFilesEnabled(_recentFilesEnabled);
+        SettingsPage.SetWordWrap(_viewOptions.WordWrap);
+        SettingsPage.SetFontOptions(_fontOptions);
         SettingsPage.AppearanceChanged += OnAppearanceChanged;
         SettingsPage.ThemeChanged += OnThemeChanged;
         SettingsPage.RecentFilesEnabledChanged += OnRecentFilesEnabledChanged;
+        SettingsPage.WordWrapChanged += OnSettingsWordWrapChanged;
+        SettingsPage.FontOptionsChanged += OnFontOptionsChanged;
+        NotepadSettingsStore.FontOptionsChanged += OnGlobalFontOptionsChanged;
         foreach (var tab in _workspace.Tabs)
         {
             _tabs.Add(new NotepadTabItem(tab));
@@ -165,6 +171,24 @@ public partial class MainWindow : Window
         }
 
         RefreshRecentFilesMenu();
+    }
+
+    private void OnSettingsWordWrapChanged(object? sender, bool enabled)
+    {
+        _viewOptions = _viewOptions with { WordWrap = enabled };
+        ApplyViewOptions();
+        NotepadSettingsStore.SaveViewOptions(_viewOptions);
+        Editor.Focus();
+    }
+
+    private void OnFontOptionsChanged(object? sender, NotepadFontOptions options) =>
+        NotepadSettingsStore.SaveFontOptions(options);
+
+    private void OnGlobalFontOptionsChanged(object? sender, NotepadFontOptions options)
+    {
+        _fontOptions = options;
+        SettingsPage.SetFontOptions(options);
+        ApplyViewOptions();
     }
 
     private void OnWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
@@ -512,17 +536,19 @@ public partial class MainWindow : Window
 
     private void OnEditMenuOpened(object? sender, EventArgs e)
     {
+        var hasSelection = Editor.SelectionLength > 0;
         UndoMenuItem.IsEnabled = Editor.CanUndo;
-        CutMenuItem.IsEnabled = Editor.CanCut;
-        CopyMenuItem.IsEnabled = Editor.CanCopy;
+        CutMenuItem.IsEnabled = hasSelection;
+        CopyMenuItem.IsEnabled = hasSelection;
         PasteMenuItem.IsEnabled = Editor.CanPaste;
-        DeleteMenuItem.IsEnabled = Editor.CanDelete;
+        DeleteMenuItem.IsEnabled = hasSelection;
         FindMenuItem.IsEnabled = Editor.CanSearch;
         FindNextMenuItem.IsEnabled = Editor.CanSearch;
         FindPreviousMenuItem.IsEnabled = Editor.CanSearch;
         ReplaceMenuItem.IsEnabled = Editor.CanSearch;
         GoToMenuItem.IsEnabled = Editor.Document?.LineCount > 0;
-        SelectAllMenuItem.IsEnabled = Editor.CanSelectAll;
+        // Windows Notepad keeps Select all available even for an empty document.
+        SelectAllMenuItem.IsEnabled = true;
     }
 
     private void OnViewMenuOpened(object? sender, EventArgs e)
@@ -567,7 +593,16 @@ public partial class MainWindow : Window
 
     private void ApplyViewOptions()
     {
-        Editor.FontSize = BaseEditorFontSize * _viewOptions.ZoomPercent / 100;
+        Editor.FontFamily = new FontFamily(_fontOptions.Family);
+        Editor.FontStyle = _fontOptions.Style is NotepadEditorFontStyle.Italic
+            or NotepadEditorFontStyle.BoldItalic
+                ? FontStyle.Italic
+                : FontStyle.Normal;
+        Editor.FontWeight = _fontOptions.Style is NotepadEditorFontStyle.Bold
+            or NotepadEditorFontStyle.BoldItalic
+                ? FontWeight.Bold
+                : FontWeight.Normal;
+        Editor.FontSize = _fontOptions.Size * _viewOptions.ZoomPercent / 100;
         Editor.WordWrap = _viewOptions.WordWrap;
         Editor.HorizontalScrollBarVisibility = _viewOptions.WordWrap
             ? ScrollBarVisibility.Disabled
@@ -575,6 +610,7 @@ public partial class MainWindow : Window
         StatusBar.IsVisible = _viewOptions.ShowStatusBar;
         StatusBarMenuItem.IsChecked = _viewOptions.ShowStatusBar;
         WordWrapMenuItem.IsChecked = _viewOptions.WordWrap;
+        SettingsPage.SetWordWrap(_viewOptions.WordWrap);
         ZoomStatus.Text = $"{_viewOptions.ZoomPercent:0}%";
     }
 
@@ -966,6 +1002,7 @@ public partial class MainWindow : Window
 
     private void OnWindowClosed(object? sender, EventArgs e)
     {
+        NotepadSettingsStore.FontOptionsChanged -= OnGlobalFontOptionsChanged;
         _externalChangeCheckCancellation?.Cancel();
         _externalChangeCheckCancellation?.Dispose();
         _externalChangesDecision?.TrySetResult(ExternalChangesDecision.Cancel);

@@ -152,7 +152,7 @@ static void VerifyPortableEditLogic()
 {
     var buffer = new StringTextBuffer("alpha beta\r\ngamma");
     Assert(NotepadEditLogic.GetSearchText(buffer, 7, 0) == "beta",
-        "Find must seed from the word under the caret, matching upstream Notepads");
+        "Find must seed from the word under the caret, matching Windows Notepad behavior");
     Assert(NotepadEditLogic.GetSearchText(buffer, 0, 5) == "alpha",
         "Find must seed from the current single-line selection");
     Assert(NotepadEditLogic.GetSearchText(buffer, 0, 13) == string.Empty,
@@ -163,8 +163,14 @@ static void VerifyPortableEditLogic()
     var culture = System.Globalization.CultureInfo.GetCultureInfo("en-US");
     var instant = new DateTime(2026, 7, 22, 16, 42, 3);
     Assert(
-        NotepadEditLogic.GetDateTimeText(instant, culture) == instant.ToString(culture),
-        "Time/Date must use the current-culture DateTime format from upstream Notepads");
+        NotepadEditLogic.GetDateTimeText(instant, culture)
+            == $"{instant.ToString("t", culture)} {instant.ToString("d", culture)}",
+        "Time/Date must compose localized short time followed by localized short date");
+    Assert(
+        NotepadEditLogic.GetDateTimeText(
+            instant,
+            System.Globalization.CultureInfo.GetCultureInfo("de-DE")) == "16:42 22.07.2026",
+        "Time/Date must match the verified German Windows Notepad format");
 }
 
 static void VerifyPrintFieldFormatting()

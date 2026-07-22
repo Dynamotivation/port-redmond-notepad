@@ -3,8 +3,7 @@ using System.Globalization;
 namespace Redmond.Notepad.Core;
 
 /// <summary>
-/// Portable adaptations of the selection/search and Time/Date behavior from
-/// Notepads' UWP TextEditorCore.
+/// Portable selection/search and Windows Notepad-compatible Time/Date behavior.
 /// </summary>
 public static class NotepadEditLogic
 {
@@ -46,8 +45,12 @@ public static class NotepadEditLogic
         return buffer.GetText(start, end - start);
     }
 
-    public static string GetDateTimeText(DateTime? value = null, CultureInfo? culture = null) =>
-        (value ?? DateTime.Now).ToString(culture ?? CultureInfo.CurrentCulture);
+    public static string GetDateTimeText(DateTime? value = null, CultureInfo? culture = null)
+    {
+        var resolvedValue = value ?? DateTime.Now;
+        var resolvedCulture = culture ?? CultureInfo.CurrentCulture;
+        return $"{resolvedValue.ToString("t", resolvedCulture)} {resolvedValue.ToString("d", resolvedCulture)}";
+    }
 
     private static bool IsLetterOrDigitAt(ITextBuffer buffer, int offset) =>
         offset >= 0
