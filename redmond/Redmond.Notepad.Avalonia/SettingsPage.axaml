@@ -111,7 +111,9 @@
           <shared:SettingsCard.Icon>
             <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="17" Text="◷" />
           </shared:SettingsCard.Icon>
-          <ToggleSwitch Classes="settingToggle" />
+          <ToggleSwitch x:Name="RecentFilesToggle"
+                        Classes="settingToggle"
+                        Click="OnRecentFilesToggleClick" />
         </shared:SettingsCard>
 
         <TextBlock Classes="sectionHeading" Text="Spelling" />

@@ -30,6 +30,14 @@ The portable header/footer formatter supports the Windows Notepad field syntax
 for file name, current and total page numbers, date, time, escaping, and
 left/centre/right alignment.
 
+## Recent files
+
+Successful file opens are persisted newest-first in the application settings,
+de-duplicated, and capped at ten entries. The File menu shows each file name
+with its complete path in a tooltip, removes missing entries when selected, and
+provides a separated Clear list command. The Recent Files settings switch can
+hide the menu and pause collection without discarding the saved list.
+
 ## Build and verify
 
 ```sh

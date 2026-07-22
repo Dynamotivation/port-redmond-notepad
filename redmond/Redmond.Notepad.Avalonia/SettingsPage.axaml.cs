@@ -21,6 +21,8 @@ public partial class SettingsPage : UserControl
 
     public event EventHandler<AppThemePreference>? ThemeChanged;
 
+    public event EventHandler<bool>? RecentFilesEnabledChanged;
+
     public void SetAppearance(WindowAppearanceOptions appearance) =>
         WindowAppearancePanel.SetOptions(appearance);
 
@@ -32,6 +34,8 @@ public partial class SettingsPage : UserControl
         DarkThemeButton.IsChecked = preference == AppThemePreference.Dark;
         _isUpdatingTheme = false;
     }
+
+    public void SetRecentFilesEnabled(bool enabled) => RecentFilesToggle.IsChecked = enabled;
 
     public void ShowFontSettings()
     {
@@ -57,6 +61,9 @@ public partial class SettingsPage : UserControl
 
     private void OnAppearanceChanged(object? sender, WindowAppearanceOptions options) =>
         AppearanceChanged?.Invoke(this, options);
+
+    private void OnRecentFilesToggleClick(object? sender, RoutedEventArgs e) =>
+        RecentFilesEnabledChanged?.Invoke(this, RecentFilesToggle.IsChecked == true);
 
     private void UpdateResponsiveLayout(double width)
     {
