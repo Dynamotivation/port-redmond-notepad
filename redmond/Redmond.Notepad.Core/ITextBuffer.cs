@@ -12,18 +12,35 @@ public interface ITextBuffer
 
     int LineCount { get; }
 
+    bool IsModified { get; }
+
     string Text { get; set; }
 
     TextPosition GetPosition(int offset);
 
     TextReader CreateReader();
 
+    ITextSnapshot CreateSnapshot();
+
     void WriteTo(TextWriter writer);
 
     void Replace(int offset, int length, string text);
+
+    void MarkAsOriginal();
 }
 
 public readonly record struct TextPosition(int Line, int Column);
+
+public interface ITextSnapshot
+{
+    int Length { get; }
+
+    string Text { get; }
+
+    TextReader CreateReader();
+
+    void WriteTo(TextWriter writer);
+}
 
 public interface ITextBufferFactory
 {

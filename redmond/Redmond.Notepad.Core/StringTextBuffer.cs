@@ -7,14 +7,38 @@ namespace Redmond.Notepad.Core;
 public sealed class StringTextBuffer(string initialText = "") : ITextBuffer
 {
     private string _text = initialText ?? string.Empty;
+    private bool _isModified;
 
     public event EventHandler? Changed;
 
     public int Length => _text.Length;
 
-    public int LineCount => _text.Length == 0
-        ? 1
-        : _text.Count(character => character == '\n') + 1;
+    public int LineCount
+    {
+        get
+        {
+            var count = 1;
+            for (var index = 0; index < _text.Length; index++)
+            {
+                if (_text[index] == '\r')
+                {
+                    count++;
+                    if (index + 1 < _text.Length && _text[index + 1] == '\n')
+                    {
+                        index++;
+                    }
+                }
+                else if (_text[index] == '\n')
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+    }
+
+    public bool IsModified => _isModified;
 
     public string Text
     {
@@ -28,6 +52,7 @@ public sealed class StringTextBuffer(string initialText = "") : ITextBuffer
             }
 
             _text = value;
+            _isModified = true;
             Changed?.Invoke(this, EventArgs.Empty);
         }
     }
@@ -39,7 +64,16 @@ public sealed class StringTextBuffer(string initialText = "") : ITextBuffer
         var column = 1;
         for (var index = 0; index < offset; index++)
         {
-            if (_text[index] == '\n')
+            if (_text[index] == '\r')
+            {
+                line++;
+                column = 1;
+                if (index + 1 < offset && _text[index + 1] == '\n')
+                {
+                    index++;
+                }
+            }
+            else if (_text[index] == '\n')
             {
                 line++;
                 column = 1;
@@ -55,6 +89,8 @@ public sealed class StringTextBuffer(string initialText = "") : ITextBuffer
 
     public TextReader CreateReader() => new StringReader(_text);
 
+    public ITextSnapshot CreateSnapshot() => new StringTextSnapshot(_text);
+
     public void WriteTo(TextWriter writer) => writer.Write(_text);
 
     public void Replace(int offset, int length, string text)
@@ -67,6 +103,19 @@ public sealed class StringTextBuffer(string initialText = "") : ITextBuffer
         }
 
         Text = string.Concat(_text.AsSpan(0, offset), text ?? string.Empty, _text.AsSpan(offset + length));
+    }
+
+    public void MarkAsOriginal() => _isModified = false;
+
+    private sealed class StringTextSnapshot(string text) : ITextSnapshot
+    {
+        public int Length => text.Length;
+
+        public string Text => text;
+
+        public TextReader CreateReader() => new StringReader(text);
+
+        public void WriteTo(TextWriter writer) => writer.Write(text);
     }
 }
 

@@ -4,5 +4,6 @@
   <Project Path="Redmond.Notepad.Core/Redmond.Notepad.Core.csproj" />
   <Project Path="Redmond.Notepad.Editor.AvaloniaEdit/Redmond.Notepad.Editor.AvaloniaEdit.csproj" />
   <Project Path="Redmond.Notepad.Performance/Redmond.Notepad.Performance.csproj" />
+  <Project Path="Redmond.Notepad.Verification/Redmond.Notepad.Verification.csproj" />
   <Project Path="Redmond.Notepad.Avalonia/Redmond.Notepad.Avalonia.csproj" />
 </Solution>

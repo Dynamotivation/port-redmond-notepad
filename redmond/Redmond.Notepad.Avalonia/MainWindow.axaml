@@ -338,7 +338,17 @@
           ColumnDefinitions="*,Auto"
           Margin="7,3">
       <StackPanel Orientation="Horizontal" Spacing="1">
-        <Button Classes="chrome" Content="File" />
+        <Button Classes="chrome" Content="File">
+          <Button.Flyout>
+            <MenuFlyout Placement="BottomEdgeAlignedLeft">
+              <MenuItem Header="New tab" Click="OnNewTabClick" />
+              <MenuItem Header="Open…" Click="OnOpenFilesClick" />
+              <MenuItem Header="-" />
+              <MenuItem Header="Save" Click="OnSaveClick" />
+              <MenuItem Header="Save as…" Click="OnSaveAsClick" />
+            </MenuFlyout>
+          </Button.Flyout>
+        </Button>
         <Button Classes="chrome" Content="Edit" />
         <Button Classes="chrome" Content="View" />
       </StackPanel>
@@ -397,7 +407,11 @@
                    Margin="14,0"
                    FontSize="12"
                    Text="Windows (CRLF)" />
-        <TextBlock Grid.Column="4" Margin="14,0,2,0" FontSize="12" Text="UTF-8" />
+        <TextBlock x:Name="EncodingStatus"
+                   Grid.Column="4"
+                   Margin="14,0,2,0"
+                   FontSize="12"
+                   Text="UTF-8" />
       </Grid>
     </Border>
     </Grid>
@@ -415,5 +429,39 @@
   </Grid>
   </Border>
   <shared:WindowResizeHandles x:Name="ResizeHandles" />
+
+  <Border x:Name="UnsavedChangesOverlay"
+          ZIndex="20"
+          IsVisible="False"
+          Background="#66000000">
+    <Border Width="440"
+            Padding="24"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Background="{DynamicResource NotepadEditorBrush}"
+            BorderBrush="{DynamicResource NotepadDividerBrush}"
+            BorderThickness="1"
+            CornerRadius="8">
+      <StackPanel Spacing="14">
+        <TextBlock FontSize="20"
+                   FontWeight="SemiBold"
+                   Text="Save changes?" />
+        <TextBlock x:Name="UnsavedChangesMessage"
+                   TextWrapping="Wrap" />
+        <StackPanel Margin="0,8,0,0"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Spacing="8">
+          <Button Content="Cancel"
+                  Click="OnCancelUnsavedChangesClick" />
+          <Button Content="Don't save"
+                  Click="OnDiscardUnsavedChangesClick" />
+          <Button x:Name="SaveUnsavedChangesButton"
+                  Content="Save"
+                  Click="OnSaveUnsavedChangesClick" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </Border>
   </Grid>
 </Window>

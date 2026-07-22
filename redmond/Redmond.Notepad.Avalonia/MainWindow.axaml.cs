@@ -7,6 +7,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Text;
 using Redmond.Avalonia.Controls;
 using Redmond.Avalonia.Windowing;
 using Redmond.Notepad.Core;
@@ -22,14 +23,28 @@ public partial class MainWindow : Window
 
     private readonly NotepadWorkspace _workspace;
     private readonly ObservableCollection<NotepadTabItem> _tabs = [];
+    private readonly ITextFileStore _fileStore = new PhysicalTextFileStore();
+    private readonly IReadOnlyList<DocumentFileReference> _initialFiles;
     private readonly WindowAppearanceController _appearanceController;
     private WindowAppearanceOptions _appearance;
     private AppThemePreference _themePreference;
     private bool _isLoadingTab;
     private bool _isUpdatingTabScrollButtons;
+    private bool _allowWindowClose;
+    private bool _isHandlingWindowClose;
+    private INotepadFilePicker? _filePicker;
+    private TaskCompletionSource<UnsavedChangesDecision>? _unsavedChangesDecision;
 
-    public MainWindow()
+    public MainWindow() : this([])
     {
+    }
+
+    internal MainWindow(IEnumerable<string> initialPaths)
+    {
+        _initialFiles = initialPaths
+            .Where(File.Exists)
+            .Select(path => new DocumentFileReference(path))
+            .ToArray();
         _workspace = new NotepadWorkspace(new AvaloniaEditTextBufferFactory());
         InitializeComponent();
         _appearance = NotepadSettingsStore.LoadAppearance();
@@ -51,13 +66,20 @@ public partial class MainWindow : Window
         Editor.TextChanged += OnEditorTextChanged;
         Editor.TextArea.Caret.PositionChanged += OnCaretPositionChanged;
         Opened += OnOpened;
+        Closing += OnWindowClosing;
         PropertyChanged += OnWindowPropertyChanged;
         LoadSelectedTab();
         RefreshDocumentStatus();
     }
 
-    private void OnOpened(object? sender, EventArgs e)
+    private async void OnOpened(object? sender, EventArgs e)
     {
+        _filePicker = new AvaloniaNotepadFilePicker(StorageProvider);
+        if (_initialFiles.Count > 0)
+        {
+            await OpenFilesAsync(_initialFiles);
+        }
+
         Editor.Focus();
         ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
     }
@@ -118,13 +140,146 @@ public partial class MainWindow : Window
         ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
     }
 
-    private void OnCloseTabClick(object? sender, RoutedEventArgs e)
+    private async void OnOpenFilesClick(object? sender, RoutedEventArgs e)
+    {
+        if (_filePicker is null)
+        {
+            return;
+        }
+
+        var files = await _filePicker.PickOpenFilesAsync(allowMultiple: true);
+        await OpenFilesAsync(files);
+    }
+
+    private async Task OpenFilesAsync(IReadOnlyList<DocumentFileReference> files)
+    {
+        var selectedDocumentChanged = false;
+        string? errorMessage = null;
+        foreach (var file in files)
+        {
+            var existing = _tabs.FirstOrDefault(item =>
+                string.Equals(item.Tab.Document.File?.Path, file.Path, StringComparison.OrdinalIgnoreCase));
+            if (existing is not null)
+            {
+                TabsList.SelectedItem = existing;
+                selectedDocumentChanged = true;
+                continue;
+            }
+
+            var useCurrentTab = _tabs.Count == 1
+                && _workspace.SelectedTab.Document.File is null
+                && !_workspace.SelectedTab.Document.IsModified
+                && _workspace.SelectedTab.Document.CharacterCount == 0;
+            var tab = useCurrentTab ? _workspace.SelectedTab : _workspace.CreateTab();
+            var item = useCurrentTab
+                ? _tabs.Single(candidate => ReferenceEquals(candidate.Tab, tab))
+                : new NotepadTabItem(tab);
+            if (!useCurrentTab)
+            {
+                _tabs.Add(item);
+            }
+
+            try
+            {
+                await tab.Document.LoadAsync(_fileStore, file);
+                item.RefreshTitle();
+                TabsList.SelectedItem = item;
+                selectedDocumentChanged = true;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or DecoderFallbackException)
+            {
+                if (!useCurrentTab)
+                {
+                    _workspace.CloseTab(tab);
+                    _tabs.Remove(item);
+                }
+
+                errorMessage = $"Could not open {file.DisplayName}: {exception.Message}";
+            }
+        }
+
+        RefreshTabSeparators();
+        if (selectedDocumentChanged)
+        {
+            LoadSelectedTab();
+        }
+        else if (errorMessage is not null)
+        {
+            DocumentSummary.Text = errorMessage;
+        }
+
+        ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
+    }
+
+    private async void OnSaveClick(object? sender, RoutedEventArgs e) =>
+        await SaveSelectedDocumentAsync(forcePicker: false);
+
+    private async void OnSaveAsClick(object? sender, RoutedEventArgs e) =>
+        await SaveSelectedDocumentAsync(forcePicker: true);
+
+    private async Task<bool> SaveSelectedDocumentAsync(bool forcePicker)
+    {
+        var document = _workspace.SelectedTab.Document;
+        var destination = forcePicker ? null : document.File;
+        if (destination is null)
+        {
+            if (_filePicker is null)
+            {
+                return false;
+            }
+
+            destination = await _filePicker.PickSaveFileAsync(
+                document.File?.DisplayName ?? $"{NotepadDocument.UntitledName}.txt");
+            if (destination is null)
+            {
+                return false;
+            }
+        }
+
+        try
+        {
+            await document.SaveAsync(_fileStore, destination);
+            if (TabsList.SelectedItem is NotepadTabItem item)
+            {
+                item.RefreshTitle();
+            }
+
+            UpdateDocumentTitle();
+            RefreshDocumentStatus();
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or EncoderFallbackException)
+        {
+            DocumentSummary.Text = $"Could not save {destination.DisplayName}: {exception.Message}";
+            return false;
+        }
+    }
+
+    private async void OnCloseTabClick(object? sender, RoutedEventArgs e)
     {
         if (sender is not Button { CommandParameter: NotepadTabItem item })
         {
             return;
         }
 
+        if (item.Tab.Document.IsModified)
+        {
+            TabsList.SelectedItem = item;
+            var decision = await AskToSaveChangesAsync(item.Tab.Document);
+            if (decision == UnsavedChangesDecision.Cancel
+                || decision == UnsavedChangesDecision.Save
+                && !await SaveSelectedDocumentAsync(forcePicker: false))
+            {
+                return;
+            }
+        }
+
+        CloseTab(item);
+        e.Handled = true;
+    }
+
+    private void CloseTab(NotepadTabItem item)
+    {
         var tab = item.Tab;
         var replacement = _workspace.CloseTab(tab);
         _tabs.Remove(item);
@@ -139,7 +294,75 @@ public partial class MainWindow : Window
         RefreshTabSeparators();
         LoadSelectedTab();
         ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
-        e.Handled = true;
+    }
+
+    private async void OnWindowClosing(object? sender, WindowClosingEventArgs e)
+    {
+        if (_allowWindowClose)
+        {
+            return;
+        }
+
+        var modifiedTabs = _tabs.Where(item => item.Tab.Document.IsModified).ToArray();
+        if (modifiedTabs.Length == 0)
+        {
+            return;
+        }
+
+        e.Cancel = true;
+        if (_isHandlingWindowClose)
+        {
+            return;
+        }
+
+        _isHandlingWindowClose = true;
+        foreach (var item in modifiedTabs)
+        {
+            TabsList.SelectedItem = item;
+            var decision = await AskToSaveChangesAsync(item.Tab.Document);
+            if (decision == UnsavedChangesDecision.Cancel
+                || decision == UnsavedChangesDecision.Save
+                && !await SaveSelectedDocumentAsync(forcePicker: false))
+            {
+                _isHandlingWindowClose = false;
+                return;
+            }
+        }
+
+        _allowWindowClose = true;
+        Close();
+    }
+
+    private Task<UnsavedChangesDecision> AskToSaveChangesAsync(NotepadDocument document)
+    {
+        if (_unsavedChangesDecision is not null)
+        {
+            return _unsavedChangesDecision.Task;
+        }
+
+        UnsavedChangesMessage.Text = $"Do you want to save changes to {document.DisplayName}?";
+        UnsavedChangesOverlay.IsVisible = true;
+        SaveUnsavedChangesButton.Focus();
+        _unsavedChangesDecision = new TaskCompletionSource<UnsavedChangesDecision>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        return _unsavedChangesDecision.Task;
+    }
+
+    private void OnSaveUnsavedChangesClick(object? sender, RoutedEventArgs e) =>
+        ResolveUnsavedChanges(UnsavedChangesDecision.Save);
+
+    private void OnDiscardUnsavedChangesClick(object? sender, RoutedEventArgs e) =>
+        ResolveUnsavedChanges(UnsavedChangesDecision.Discard);
+
+    private void OnCancelUnsavedChangesClick(object? sender, RoutedEventArgs e) =>
+        ResolveUnsavedChanges(UnsavedChangesDecision.Cancel);
+
+    private void ResolveUnsavedChanges(UnsavedChangesDecision decision)
+    {
+        var completion = _unsavedChangesDecision;
+        _unsavedChangesDecision = null;
+        UnsavedChangesOverlay.IsVisible = false;
+        completion?.TrySetResult(decision);
     }
 
     private void OnTabSelectionChanged(object? sender, SelectionChangedEventArgs e)
@@ -275,9 +498,13 @@ public partial class MainWindow : Window
         Editor.Document = GetEditorBuffer(_workspace.SelectedTab).Document;
         Editor.CaretOffset = Editor.Document.TextLength;
         _isLoadingTab = false;
-        Title = $"{_workspace.SelectedTab.Title} - Notepad";
+        UpdateDocumentTitle();
         RefreshDocumentStatus();
         RefreshCursorStatus();
+        if (TabsList.SelectedItem is NotepadTabItem item)
+        {
+            item.RefreshTitle();
+        }
         Editor.Focus();
     }
 
@@ -314,6 +541,11 @@ public partial class MainWindow : Window
 
         RefreshDocumentStatus();
         RefreshCursorStatus();
+        UpdateDocumentTitle();
+        if (TabsList.SelectedItem is NotepadTabItem item)
+        {
+            item.RefreshTitle();
+        }
     }
 
     private void OnCaretPositionChanged(object? sender, EventArgs e) => RefreshCursorStatus();
@@ -325,6 +557,7 @@ public partial class MainWindow : Window
         var characterLabel = document.CharacterCount == 1 ? "character" : "characters";
         DocumentSummary.Text = $"{document.LineCount} {lineLabel} · {document.CharacterCount} {characterLabel}";
         LineEndingStatus.Text = document.LineEndingDisplayText;
+        EncodingStatus.Text = document.EncodingDisplayText;
     }
 
     private void RefreshCursorStatus()
@@ -336,6 +569,13 @@ public partial class MainWindow : Window
     private static AvaloniaEditTextBuffer GetEditorBuffer(NotepadTab tab) =>
         tab.Document.Buffer as AvaloniaEditTextBuffer
         ?? throw new InvalidOperationException("The Avalonia frontend requires an AvaloniaEdit text buffer.");
+
+    private void UpdateDocumentTitle()
+    {
+        var document = _workspace.SelectedTab.Document;
+        var modified = document.IsModified ? "*" : string.Empty;
+        Title = $"{modified}{document.DisplayName} - Notepad";
+    }
 }
 
 internal sealed class NotepadTabItem(NotepadTab tab) : INotifyPropertyChanged
@@ -345,7 +585,10 @@ internal sealed class NotepadTabItem(NotepadTab tab) : INotifyPropertyChanged
 
     public NotepadTab Tab { get; } = tab;
 
-    public string Title => Tab.Title;
+    public string Title => Tab.Document.IsModified ? $"*{Tab.Title}" : Tab.Title;
+
+    public void RefreshTitle() =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Title)));
 
     public bool ShowLeadingSeparator
     {
@@ -378,4 +621,11 @@ internal sealed class NotepadTabItem(NotepadTab tab) : INotifyPropertyChanged
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+}
+
+internal enum UnsavedChangesDecision
+{
+    Save,
+    Discard,
+    Cancel,
 }

@@ -19,6 +19,7 @@ var factory = new AvaloniaEditTextBufferFactory();
 var construction = Stopwatch.StartNew();
 var buffer = factory.Create(source);
 construction.Stop();
+var snapshot = buffer.CreateSnapshot();
 
 var editOffset = buffer.Length / 2;
 var edits = Stopwatch.StartNew();
@@ -41,6 +42,10 @@ locations.Stop();
 if (buffer.Length != source.Length || buffer.LineCount != expectedLineCount || buffer.Text != source)
 {
     throw new InvalidOperationException("The incremental editor benchmark changed document contents or metadata.");
+}
+if (snapshot.Length != source.Length || snapshot.Text != source)
+{
+    throw new InvalidOperationException("The immutable editor snapshot changed with the live document.");
 }
 
 Console.WriteLine($"Buffer: {buffer.GetType().Name}");
