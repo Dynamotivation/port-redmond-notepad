@@ -21,10 +21,14 @@ namespace Redmond.Notepad.Avalonia;
 
 public partial class MainWindow : Window
 {
-    private const double TabWidth = 210;
+    private const double TabCornerOverhangWidth = 16;
+    private const double MaximumTabWidth = 228;
+    private const double MinimumTabWidth = 80;
+    private const double TabWidthReductionFactor = 0.75;
+    private const double NewTabButtonSlotWidth = 37;
     private const double TabScrollStep = 8;
-    private const double TabScrollButtonWidth = 28;
     private const double ZoomStep = 10;
+    private static readonly double[] TabWidthSteps = CreateTabWidthSteps();
 
     private readonly NotepadWorkspace _workspace;
     private readonly ObservableCollection<NotepadTabItem> _tabs = [];
@@ -43,6 +47,10 @@ public partial class MainWindow : Window
     private bool _recentFilesEnabled;
     private bool _isLoadingTab;
     private bool _isUpdatingTabScrollButtons;
+    private bool _isTabWidthUpdateScheduled;
+    private bool _allowTabGrowthOnNextUpdate;
+    private bool _isPointerOverTabBar;
+    private int _tabWidthStep;
     private bool _allowWindowClose;
     private bool _isHandlingWindowClose;
     private bool _suppressExternalChangeCheck;
@@ -72,6 +80,8 @@ public partial class MainWindow : Window
         Resources["CloseTabToolTip"] = FormatCommandToolTip("Close tab", NotepadShortcutIds.CloseTab);
         Resources["NewTabToolTip"] = FormatCommandToolTip("New tab", NotepadShortcutIds.NewTab);
         AddHandler(KeyDownEvent, OnNotepadKeyDown, RoutingStrategies.Tunnel);
+        AddHandler(PointerMovedEvent, OnWindowPointerMoved, RoutingStrategies.Tunnel);
+        PointerExited += OnWindowPointerExited;
         _appearance = NotepadSettingsStore.LoadAppearance();
         _themePreference = NotepadSettingsStore.LoadThemePreference();
         _viewOptions = NotepadSettingsStore.LoadViewOptions();
@@ -93,7 +103,7 @@ public partial class MainWindow : Window
         NotepadSettingsStore.FontOptionsChanged += OnGlobalFontOptionsChanged;
         foreach (var tab in _workspace.Tabs)
         {
-            _tabs.Add(new NotepadTabItem(tab));
+            _tabs.Add(CreateTabItem(tab));
         }
         TabsList.ItemsSource = _tabs;
         TabsList.SelectedItem = _tabs.Single(item => ReferenceEquals(item.Tab, _workspace.SelectedTab));
@@ -120,6 +130,7 @@ public partial class MainWindow : Window
         }
 
         Editor.Focus();
+        ScheduleTabWidthUpdate(allowGrowth: true);
         ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
     }
 
@@ -206,11 +217,12 @@ public partial class MainWindow : Window
     private void CreateNewTab()
     {
         var tab = _workspace.CreateTab();
-        var item = new NotepadTabItem(tab);
+        var item = CreateTabItem(tab);
         _tabs.Add(item);
         TabsList.SelectedItem = item;
         RefreshTabSeparators();
         LoadSelectedTab();
+        ScheduleTabWidthUpdate(allowGrowth: false);
         ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
     }
 
@@ -256,7 +268,7 @@ public partial class MainWindow : Window
             var tab = useCurrentTab ? _workspace.SelectedTab : _workspace.CreateTab();
             var item = useCurrentTab
                 ? _tabs.Single(candidate => ReferenceEquals(candidate.Tab, tab))
-                : new NotepadTabItem(tab);
+                : CreateTabItem(tab);
             if (!useCurrentTab)
             {
                 _tabs.Add(item);
@@ -297,6 +309,7 @@ public partial class MainWindow : Window
             DocumentSummary.Text = errorMessage;
         }
 
+        ScheduleTabWidthUpdate(allowGrowth: false);
         ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
     }
 
@@ -1015,6 +1028,8 @@ public partial class MainWindow : Window
         _externalChangesDecision?.TrySetResult(ExternalChangesDecision.Cancel);
         _printService.Dispose();
         RemoveHandler(KeyDownEvent, OnNotepadKeyDown);
+        RemoveHandler(PointerMovedEvent, OnWindowPointerMoved);
+        PointerExited -= OnWindowPointerExited;
         foreach (var registration in _shortcutRegistrations)
         {
             registration.Dispose();
@@ -1023,19 +1038,21 @@ public partial class MainWindow : Window
 
     private void CloseTab(NotepadTabItem item)
     {
+        _isPointerOverTabBar |= TabBarArea.IsPointerOver;
         var tab = item.Tab;
         var replacement = _workspace.CloseTab(tab);
         _tabs.Remove(item);
         var replacementItem = _tabs.FirstOrDefault(candidate => ReferenceEquals(candidate.Tab, replacement));
         if (replacementItem is null)
         {
-            replacementItem = new NotepadTabItem(replacement);
+            replacementItem = CreateTabItem(replacement);
             _tabs.Add(replacementItem);
         }
 
         TabsList.SelectedItem = replacementItem;
         RefreshTabSeparators();
         LoadSelectedTab();
+        ScheduleTabWidthUpdate(allowGrowth: true);
         ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
     }
 
@@ -1263,6 +1280,43 @@ public partial class MainWindow : Window
         UpdateTabScrollButtons();
     }
 
+    private void OnWindowPointerMoved(object? sender, PointerEventArgs e)
+    {
+        var position = e.GetPosition(TabBarArea);
+        var isPointerOverTabBar = DocumentTitleBar.IsVisible
+            && position.X >= 0
+            && position.X <= TabBarArea.Bounds.Width
+            && position.Y >= 0
+            && position.Y <= TabBarArea.Bounds.Height;
+
+        if (_isPointerOverTabBar == isPointerOverTabBar)
+        {
+            return;
+        }
+
+        _isPointerOverTabBar = isPointerOverTabBar;
+        if (!isPointerOverTabBar)
+        {
+            ScheduleTabWidthUpdate(allowGrowth: true);
+        }
+    }
+
+    private void OnWindowPointerExited(object? sender, PointerEventArgs e)
+    {
+        if (!_isPointerOverTabBar)
+        {
+            return;
+        }
+
+        _isPointerOverTabBar = false;
+        ScheduleTabWidthUpdate(allowGrowth: true);
+    }
+
+    private void OnTabBarSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        ScheduleTabWidthUpdate(allowGrowth: !_isPointerOverTabBar);
+    }
+
     private void ScrollTabsBy(double delta)
     {
         var maximumOffset = Math.Max(0, TabScrollViewer.Extent.Width - TabScrollViewer.Viewport.Width);
@@ -1283,6 +1337,63 @@ public partial class MainWindow : Window
         }, DispatcherPriority.Loaded);
     }
 
+    private void ScheduleTabWidthUpdate(bool allowGrowth)
+    {
+        _allowTabGrowthOnNextUpdate |= allowGrowth;
+        if (_isTabWidthUpdateScheduled)
+        {
+            return;
+        }
+
+        _isTabWidthUpdateScheduled = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            _isTabWidthUpdateScheduled = false;
+            var pointerIsOverTabBar = _isPointerOverTabBar || TabBarArea.IsPointerOver;
+            var mayGrow = _allowTabGrowthOnNextUpdate && !pointerIsOverTabBar;
+            _allowTabGrowthOnNextUpdate = false;
+            ReconcileTabWidths(mayGrow);
+        }, DispatcherPriority.Loaded);
+    }
+
+    private void ReconcileTabWidths(bool allowGrowth)
+    {
+        if (_tabs.Count == 0 || TabBarArea.Bounds.Width <= 0 || TabScrollViewer.Extent.Width <= 0)
+        {
+            return;
+        }
+
+        var currentWidth = CurrentTabWidth;
+        var fixedContentWidth = Math.Max(0, TabScrollViewer.Extent.Width - currentWidth * _tabs.Count);
+        var availableWidth = Math.Max(0, TabBarArea.Bounds.Width - NewTabButtonSlotWidth);
+        var targetStep = _tabWidthStep;
+
+        while (targetStep < TabWidthSteps.Length - 1
+               && fixedContentWidth + TabWidthSteps[targetStep] * _tabs.Count > availableWidth + 0.5)
+        {
+            targetStep++;
+        }
+
+        if (allowGrowth && targetStep == _tabWidthStep)
+        {
+            while (targetStep > 0
+                   && fixedContentWidth + TabWidthSteps[targetStep - 1] * _tabs.Count <= availableWidth + 0.5)
+            {
+                targetStep--;
+            }
+        }
+
+        if (targetStep != _tabWidthStep)
+        {
+            _tabWidthStep = targetStep;
+            ApplyCurrentTabWidth();
+            ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
+            return;
+        }
+
+        UpdateTabScrollButtons();
+    }
+
     private void UpdateTabScrollButtons()
     {
         if (_isUpdatingTabScrollButtons)
@@ -1290,11 +1401,19 @@ public partial class MainWindow : Window
             return;
         }
 
-        var widthReservedByVisibleButtons = TabScrollLeftButton.IsVisible
-            ? TabScrollButtonWidth * 2
-            : 0;
-        var availableWidthWithoutButtons = TabScrollViewer.Viewport.Width + widthReservedByVisibleButtons;
-        var hasOverflow = TabScrollViewer.Extent.Width > availableWidthWithoutButtons + 0.5;
+        var tabAreaWidth = TabBarArea.Bounds.Width;
+        var availableWidthWithoutChevrons = Math.Max(0, tabAreaWidth - NewTabButtonSlotWidth);
+        var hasOverflow = TabScrollViewer.Extent.Width > availableWidthWithoutChevrons + 0.5;
+
+        if (hasOverflow && _tabWidthStep < TabWidthSteps.Length - 1)
+        {
+            ScheduleTabWidthUpdate(allowGrowth: false);
+            return;
+        }
+
+        TabBarControls.Width = hasOverflow
+            ? tabAreaWidth
+            : Math.Min(tabAreaWidth, TabScrollViewer.Extent.Width + NewTabButtonSlotWidth);
 
         if (TabScrollLeftButton.IsVisible != hasOverflow)
         {
@@ -1311,8 +1430,17 @@ public partial class MainWindow : Window
         }
 
         var maximumOffset = Math.Max(0, TabScrollViewer.Extent.Width - TabScrollViewer.Viewport.Width);
-        TabScrollLeftButton.IsEnabled = hasOverflow && TabScrollViewer.Offset.X > 0.5;
-        TabScrollRightButton.IsEnabled = hasOverflow && TabScrollViewer.Offset.X < maximumOffset - 0.5;
+        SetTabScrollChevronState(TabScrollLeftButton, hasOverflow && TabScrollViewer.Offset.X > 0.5);
+        SetTabScrollChevronState(
+            TabScrollRightButton,
+            hasOverflow && TabScrollViewer.Offset.X < maximumOffset - 0.5);
+    }
+
+    private static void SetTabScrollChevronState(RepeatButton button, bool canScroll)
+    {
+        button.IsEnabled = true;
+        button.IsHitTestVisible = canScroll;
+        button.Opacity = canScroll ? 1 : 0.5;
     }
 
     private void EnsureSelectedTabVisible()
@@ -1328,8 +1456,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        var tabStart = selectedIndex * TabWidth;
-        var tabEnd = tabStart + TabWidth;
+        var tabStart = selectedIndex * CurrentTabLayoutWidth;
+        var tabEnd = tabStart + CurrentTabLayoutWidth;
         var offset = TabScrollViewer.Offset.X;
 
         if (tabStart < offset)
@@ -1344,6 +1472,34 @@ public partial class MainWindow : Window
         var maximumOffset = Math.Max(0, TabScrollViewer.Extent.Width - TabScrollViewer.Viewport.Width);
         TabScrollViewer.Offset = new Vector(Math.Clamp(offset, 0, maximumOffset), 0);
         UpdateTabScrollButtons();
+    }
+
+    private double CurrentTabWidth => TabWidthSteps[_tabWidthStep];
+
+    private double CurrentTabLayoutWidth => CurrentTabWidth + TabCornerOverhangWidth;
+
+    private NotepadTabItem CreateTabItem(NotepadTab tab) => new(tab, CurrentTabLayoutWidth);
+
+    private void ApplyCurrentTabWidth()
+    {
+        foreach (var tab in _tabs)
+        {
+            tab.LayoutWidth = CurrentTabLayoutWidth;
+        }
+    }
+
+    private static double[] CreateTabWidthSteps()
+    {
+        var widths = new List<double> { MaximumTabWidth };
+        var width = MaximumTabWidth;
+        while (width * TabWidthReductionFactor > MinimumTabWidth)
+        {
+            width *= TabWidthReductionFactor;
+            widths.Add(width);
+        }
+
+        widths.Add(MinimumTabWidth);
+        return [.. widths];
     }
 
     private void RefreshTabSeparators()
@@ -1458,10 +1614,11 @@ public partial class MainWindow : Window
     }
 }
 
-internal sealed class NotepadTabItem(NotepadTab tab) : INotifyPropertyChanged
+internal sealed class NotepadTabItem(NotepadTab tab, double layoutWidth) : INotifyPropertyChanged
 {
     private bool _showLeadingSeparator;
     private bool _showTrailingSeparator;
+    private double _layoutWidth = layoutWidth;
 
     public NotepadTab Tab { get; } = tab;
 
@@ -1470,6 +1627,21 @@ internal sealed class NotepadTabItem(NotepadTab tab) : INotifyPropertyChanged
     public bool ShowCloseGlyph => !Tab.Document.IsModified;
 
     public bool ShowModifiedGlyph => Tab.Document.IsModified;
+
+    public double LayoutWidth
+    {
+        get => _layoutWidth;
+        set
+        {
+            if (Math.Abs(_layoutWidth - value) < 0.01)
+            {
+                return;
+            }
+
+            _layoutWidth = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(LayoutWidth)));
+        }
+    }
 
     public void RefreshTitle()
     {
