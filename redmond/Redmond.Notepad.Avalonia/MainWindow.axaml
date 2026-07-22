@@ -339,7 +339,7 @@
     <Grid x:Name="DocumentPage"
           Grid.Row="1"
           Grid.RowSpan="3"
-          RowDefinitions="38,*,27">
+          RowDefinitions="38,*,Auto">
     <Border Grid.Row="0" Background="{DynamicResource NotepadMenuBarBrush}">
     <Grid x:Name="DocumentMenuBar"
           ColumnDefinitions="*,Auto"
@@ -350,7 +350,7 @@
             <MenuFlyout Placement="BottomEdgeAlignedLeft" Opened="OnFileMenuOpened">
               <MenuItem x:Name="NewTabMenuItem" Header="New tab" Click="OnNewTabClick" />
               <MenuItem x:Name="NewWindowMenuItem" Header="New window" Click="OnNewWindowClick" />
-              <MenuItem Header="New Markdown tab" />
+              <MenuItem Header="New Markdown tab" IsEnabled="False" />
               <MenuItem x:Name="OpenMenuItem" Header="Open" Click="OnOpenFilesClick" />
               <MenuItem x:Name="RecentFilesMenuItem" Header="Recent" />
               <MenuItem x:Name="SaveMenuItem" Header="Save" Click="OnSaveClick" />
@@ -391,7 +391,30 @@
             </MenuFlyout>
           </Button.Flyout>
         </Button>
-        <Button Classes="chrome" Content="View" />
+        <Button Classes="chrome" Content="View">
+          <Button.Flyout>
+            <MenuFlyout Placement="BottomEdgeAlignedLeft" Opened="OnViewMenuOpened">
+              <MenuItem Header="Zoom">
+                <MenuItem x:Name="ZoomInMenuItem" Header="Zoom in" Click="OnZoomInClick" />
+                <MenuItem x:Name="ZoomOutMenuItem" Header="Zoom out" Click="OnZoomOutClick" />
+                <MenuItem x:Name="RestoreZoomMenuItem"
+                          Header="Restore default zoom"
+                          Click="OnRestoreZoomClick" />
+              </MenuItem>
+              <MenuItem x:Name="StatusBarMenuItem"
+                        Header="Status bar"
+                        ToggleType="CheckBox"
+                        Click="OnStatusBarClick" />
+              <MenuItem x:Name="WordWrapMenuItem"
+                        Header="Word wrap"
+                        ToggleType="CheckBox"
+                        Click="OnWordWrapClick" />
+              <MenuItem Header="Markdown" IsEnabled="False">
+                <MenuItem Header="Markdown options unavailable" IsEnabled="False" />
+              </MenuItem>
+            </MenuFlyout>
+          </Button.Flyout>
+        </Button>
       </StackPanel>
       <Button Grid.Column="1"
               Classes="chrome"
@@ -426,7 +449,9 @@
                              AutomationProperties.Name="Text editor" />
     </Border>
 
-    <Border Grid.Row="2"
+    <Border x:Name="StatusBar"
+            Grid.Row="2"
+            Height="27"
             Background="{DynamicResource NotepadStatusBrush}"
             BorderBrush="{DynamicResource NotepadDividerBrush}"
             BorderThickness="0,1,0,0">
@@ -442,7 +467,11 @@
                    Margin="14,0"
                    FontSize="12"
                    Text="Ln 1, Col 1" />
-        <TextBlock Grid.Column="2" Margin="14,0" FontSize="12" Text="100%" />
+        <TextBlock x:Name="ZoomStatus"
+                   Grid.Column="2"
+                   Margin="14,0"
+                   FontSize="12"
+                   Text="100%" />
         <TextBlock x:Name="LineEndingStatus"
                    Grid.Column="3"
                    Margin="14,0"

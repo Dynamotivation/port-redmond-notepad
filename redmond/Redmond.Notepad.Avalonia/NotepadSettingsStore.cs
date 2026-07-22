@@ -13,6 +13,7 @@ internal static class NotepadSettingsStore
     private static readonly string ThemePath = Path.Combine(SettingsDirectory, "theme.txt");
     private static readonly string RecentFilesPath = Path.Combine(SettingsDirectory, "recent-files.json");
     private static readonly string RecentFilesEnabledPath = Path.Combine(SettingsDirectory, "recent-files-enabled.txt");
+    private static readonly string ViewPath = Path.Combine(SettingsDirectory, "view.json");
 
     public static AppThemePreference LoadThemePreference()
     {
@@ -204,6 +205,43 @@ internal static class NotepadSettingsStore
         catch (UnauthorizedAccessException)
         {
             // Recent files remain available for this session when persistence is unavailable.
+        }
+    }
+
+    public static NotepadViewOptions LoadViewOptions()
+    {
+        try
+        {
+            return File.Exists(ViewPath)
+                ? (JsonSerializer.Deserialize<NotepadViewOptions>(File.ReadAllText(ViewPath))
+                    ?? new NotepadViewOptions()).Normalized()
+                : new NotepadViewOptions();
+        }
+        catch (Exception exception) when (exception is IOException
+            or UnauthorizedAccessException
+            or JsonException
+            or NotSupportedException)
+        {
+            return new NotepadViewOptions();
+        }
+    }
+
+    public static void SaveViewOptions(NotepadViewOptions options)
+    {
+        try
+        {
+            Directory.CreateDirectory(SettingsDirectory);
+            var temporaryPath = ViewPath + ".tmp";
+            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(options.Normalized()));
+            File.Move(temporaryPath, ViewPath, overwrite: true);
+        }
+        catch (IOException)
+        {
+            // View options remain live when persistence is unavailable.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // View options remain live when persistence is unavailable.
         }
     }
 }

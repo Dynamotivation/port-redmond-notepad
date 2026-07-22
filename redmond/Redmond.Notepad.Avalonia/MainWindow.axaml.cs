@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls.Primitives;
 using Avalonia;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -23,6 +24,8 @@ public partial class MainWindow : Window
     private const double TabWidth = 210;
     private const double TabScrollStep = 8;
     private const double TabScrollButtonWidth = 28;
+    private const double BaseEditorFontSize = 14;
+    private const double ZoomStep = 10;
 
     private readonly NotepadWorkspace _workspace;
     private readonly ObservableCollection<NotepadTabItem> _tabs = [];
@@ -35,6 +38,7 @@ public partial class MainWindow : Window
     private RecentFileList _recentFiles;
     private WindowAppearanceOptions _appearance;
     private NotepadPageSettings _pageSettings = new();
+    private NotepadViewOptions _viewOptions;
     private AppThemePreference _themePreference;
     private bool _recentFilesEnabled;
     private bool _isLoadingTab;
@@ -68,6 +72,7 @@ public partial class MainWindow : Window
         AddHandler(KeyDownEvent, OnNotepadKeyDown, RoutingStrategies.Tunnel);
         _appearance = NotepadSettingsStore.LoadAppearance();
         _themePreference = NotepadSettingsStore.LoadThemePreference();
+        _viewOptions = NotepadSettingsStore.LoadViewOptions();
         _recentFiles = NotepadSettingsStore.LoadRecentFiles();
         _recentFilesEnabled = NotepadSettingsStore.LoadRecentFilesEnabled();
         _appearanceController = WindowAppearanceController.Attach(this, WindowSurface, _appearance);
@@ -86,6 +91,7 @@ public partial class MainWindow : Window
         TabsList.SelectedItem = _tabs.Single(item => ReferenceEquals(item.Tab, _workspace.SelectedTab));
         RefreshTabSeparators();
         RefreshRecentFilesMenu();
+        ApplyViewOptions();
         UpdateWindowPresentation();
         Editor.TextChanged += OnEditorTextChanged;
         Editor.TextArea.Caret.PositionChanged += OnCaretPositionChanged;
@@ -519,6 +525,59 @@ public partial class MainWindow : Window
         SelectAllMenuItem.IsEnabled = Editor.CanSelectAll;
     }
 
+    private void OnViewMenuOpened(object? sender, EventArgs e)
+    {
+        StatusBarMenuItem.IsChecked = _viewOptions.ShowStatusBar;
+        WordWrapMenuItem.IsChecked = _viewOptions.WordWrap;
+        ZoomInMenuItem.IsEnabled = _viewOptions.ZoomPercent < 500;
+        ZoomOutMenuItem.IsEnabled = _viewOptions.ZoomPercent > 10;
+        RestoreZoomMenuItem.IsEnabled = _viewOptions.ZoomPercent != 100;
+    }
+
+    private void OnZoomInClick(object? sender, RoutedEventArgs e) => ChangeZoom(ZoomStep);
+
+    private void OnZoomOutClick(object? sender, RoutedEventArgs e) => ChangeZoom(-ZoomStep);
+
+    private void OnRestoreZoomClick(object? sender, RoutedEventArgs e) => SetZoom(100);
+
+    private void ChangeZoom(double change) => SetZoom(_viewOptions.ZoomPercent + change);
+
+    private void SetZoom(double zoomPercent)
+    {
+        _viewOptions = (_viewOptions with { ZoomPercent = zoomPercent }).Normalized();
+        ApplyViewOptions();
+        NotepadSettingsStore.SaveViewOptions(_viewOptions);
+        Editor.Focus();
+    }
+
+    private void OnStatusBarClick(object? sender, RoutedEventArgs e)
+    {
+        _viewOptions = _viewOptions with { ShowStatusBar = !_viewOptions.ShowStatusBar };
+        ApplyViewOptions();
+        NotepadSettingsStore.SaveViewOptions(_viewOptions);
+    }
+
+    private void OnWordWrapClick(object? sender, RoutedEventArgs e)
+    {
+        _viewOptions = _viewOptions with { WordWrap = !_viewOptions.WordWrap };
+        ApplyViewOptions();
+        NotepadSettingsStore.SaveViewOptions(_viewOptions);
+        Editor.Focus();
+    }
+
+    private void ApplyViewOptions()
+    {
+        Editor.FontSize = BaseEditorFontSize * _viewOptions.ZoomPercent / 100;
+        Editor.WordWrap = _viewOptions.WordWrap;
+        Editor.HorizontalScrollBarVisibility = _viewOptions.WordWrap
+            ? ScrollBarVisibility.Disabled
+            : ScrollBarVisibility.Auto;
+        StatusBar.IsVisible = _viewOptions.ShowStatusBar;
+        StatusBarMenuItem.IsChecked = _viewOptions.ShowStatusBar;
+        WordWrapMenuItem.IsChecked = _viewOptions.WordWrap;
+        ZoomStatus.Text = $"{_viewOptions.ZoomPercent:0}%";
+    }
+
     private NotepadDocument? GetSelectedDocument() =>
         TabsList.SelectedItem is NotepadTabItem item ? item.Tab.Document : null;
 
@@ -783,6 +842,9 @@ public partial class MainWindow : Window
         Apply(GoToMenuItem, NotepadShortcutIds.GoTo);
         Apply(SelectAllMenuItem, NotepadShortcutIds.SelectAll);
         Apply(TimeDateMenuItem, NotepadShortcutIds.TimeDate);
+        Apply(ZoomInMenuItem, NotepadShortcutIds.ZoomIn);
+        Apply(ZoomOutMenuItem, NotepadShortcutIds.ZoomOut);
+        Apply(RestoreZoomMenuItem, NotepadShortcutIds.RestoreDefaultZoom);
         return;
 
         void Apply(MenuItem item, string shortcutId) =>
@@ -889,6 +951,15 @@ public partial class MainWindow : Window
                 break;
             case NotepadShortcutIds.TimeDate:
                 InsertTimeDate();
+                break;
+            case NotepadShortcutIds.ZoomIn:
+                ChangeZoom(ZoomStep);
+                break;
+            case NotepadShortcutIds.ZoomOut:
+                ChangeZoom(-ZoomStep);
+                break;
+            case NotepadShortcutIds.RestoreDefaultZoom:
+                SetZoom(100);
                 break;
         }
     }
