@@ -64,13 +64,24 @@
             <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
                        FontSize="18" Text="Aa" />
           </shared:AnimatedSettingsExpander.Icon>
-          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-            <ComboBox SelectedIndex="0">
-              <ComboBoxItem Content="Cascadia Mono" />
-              <ComboBoxItem Content="Consolas" />
-              <ComboBoxItem Content="System monospace" />
+          <Grid ColumnDefinitions="2*,*,Auto" ColumnSpacing="12">
+            <ComboBox x:Name="FontFamilyComboBox"
+                      SelectionChanged="OnFontSelectionChanged" />
+            <ComboBox x:Name="FontStyleComboBox"
+                      Grid.Column="1"
+                      SelectionChanged="OnFontSelectionChanged">
+              <ComboBoxItem Content="Regular" />
+              <ComboBoxItem Content="Italic" />
+              <ComboBoxItem Content="Bold" />
+              <ComboBoxItem Content="Bold Italic" />
             </ComboBox>
-            <NumericUpDown Grid.Column="1" Width="100" Minimum="8" Maximum="72" Value="14" />
+            <NumericUpDown x:Name="FontSizeBox"
+                           Grid.Column="2"
+                           Width="100"
+                           Minimum="8"
+                           Maximum="72"
+                           Increment="1"
+                           ValueChanged="OnFontSizeChanged" />
           </Grid>
         </shared:AnimatedSettingsExpander>
         <shared:SettingsCard Header="Word wrap"
@@ -78,7 +89,9 @@
           <shared:SettingsCard.Icon>
             <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="18" Text="↩" />
           </shared:SettingsCard.Icon>
-          <ToggleSwitch Classes="settingToggle" />
+          <ToggleSwitch x:Name="WordWrapToggle"
+                        Classes="settingToggle"
+                        Click="OnWordWrapToggleClick" />
         </shared:SettingsCard>
         <shared:SettingsCard Header="Formatting">
           <shared:SettingsCard.Icon>

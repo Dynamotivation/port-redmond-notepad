@@ -14,6 +14,9 @@ internal static class NotepadSettingsStore
     private static readonly string RecentFilesPath = Path.Combine(SettingsDirectory, "recent-files.json");
     private static readonly string RecentFilesEnabledPath = Path.Combine(SettingsDirectory, "recent-files-enabled.txt");
     private static readonly string ViewPath = Path.Combine(SettingsDirectory, "view.json");
+    private static readonly string FontPath = Path.Combine(SettingsDirectory, "editor-font.json");
+
+    public static event EventHandler<NotepadFontOptions>? FontOptionsChanged;
 
     public static AppThemePreference LoadThemePreference()
     {
@@ -243,5 +246,45 @@ internal static class NotepadSettingsStore
         {
             // View options remain live when persistence is unavailable.
         }
+    }
+
+    public static NotepadFontOptions LoadFontOptions()
+    {
+        try
+        {
+            return File.Exists(FontPath)
+                ? (JsonSerializer.Deserialize<NotepadFontOptions>(File.ReadAllText(FontPath))
+                    ?? NotepadFontOptions.Default).Normalized()
+                : NotepadFontOptions.Default;
+        }
+        catch (Exception exception) when (exception is IOException
+            or UnauthorizedAccessException
+            or JsonException
+            or NotSupportedException)
+        {
+            return NotepadFontOptions.Default;
+        }
+    }
+
+    public static void SaveFontOptions(NotepadFontOptions options)
+    {
+        options = options.Normalized();
+        try
+        {
+            Directory.CreateDirectory(SettingsDirectory);
+            var temporaryPath = FontPath + ".tmp";
+            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(options));
+            File.Move(temporaryPath, FontPath, overwrite: true);
+        }
+        catch (IOException)
+        {
+            // Font options remain live when persistence is unavailable.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Font options remain live when persistence is unavailable.
+        }
+
+        FontOptionsChanged?.Invoke(null, options);
     }
 }
