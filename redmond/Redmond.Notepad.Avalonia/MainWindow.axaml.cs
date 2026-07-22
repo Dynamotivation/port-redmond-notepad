@@ -13,6 +13,7 @@ using Redmond.Avalonia.Controls;
 using Redmond.Avalonia.Windowing;
 using Redmond.Notepad.Core;
 using Redmond.Notepad.Editor.AvaloniaEdit;
+using Redmond.Notepad.Avalonia.Printing;
 using Redmond.Shortcuts;
 
 namespace Redmond.Notepad.Avalonia;
@@ -30,7 +31,9 @@ public partial class MainWindow : Window
     private readonly IShortcutService _shortcutService;
     private readonly IReadOnlyList<IDisposable> _shortcutRegistrations;
     private readonly WindowAppearanceController _appearanceController;
+    private readonly IPlatformPrintService _printService;
     private WindowAppearanceOptions _appearance;
+    private NotepadPageSettings _pageSettings = new();
     private AppThemePreference _themePreference;
     private bool _isLoadingTab;
     private bool _isUpdatingTabScrollButtons;
@@ -58,6 +61,7 @@ public partial class MainWindow : Window
         _shortcutRegistrations = NotepadShortcutCatalog.CreateDefinitions()
             .Select(definition => _shortcutService.Register(definition))
             .ToArray();
+        _printService = PlatformPrintServiceFactory.Create();
         ConfigureFileMenuShortcuts();
         AddHandler(KeyDownEvent, OnNotepadKeyDown, RoutingStrategies.Tunnel);
         _appearance = NotepadSettingsStore.LoadAppearance();
@@ -382,8 +386,13 @@ public partial class MainWindow : Window
 
     private void OnCloseWindowClick(object? sender, RoutedEventArgs e) => Close();
 
-    private void OnPageSetupClick(object? sender, RoutedEventArgs e) =>
-        ShowUnavailableFeature("Page setup");
+    private void OnPageSetupClick(object? sender, RoutedEventArgs e) => ShowPageSetup();
+
+    private void ShowPageSetup()
+    {
+        var result = _printService.ShowPageSetup(GetNativeWindowHandle(), ref _pageSettings);
+        ReportPrintResult(result, "Page setup updated.");
+    }
 
     private void OnEditMenuOpened(object? sender, EventArgs e)
     {
@@ -592,12 +601,37 @@ public partial class MainWindow : Window
         SettingsPage.ShowFontSettings();
     }
 
-    private void OnPrintClick(object? sender, RoutedEventArgs e) =>
-        ShowUnavailableFeature("Printing");
+    private void OnPrintClick(object? sender, RoutedEventArgs e) => PrintSelectedDocument();
 
-    private void ShowUnavailableFeature(string feature)
+    private void PrintSelectedDocument()
     {
-        DocumentSummary.Text = $"{feature} is not available in this preview.";
+        var document = GetSelectedDocument();
+        if (document is null)
+        {
+            return;
+        }
+
+        var printableDocument = new NotepadPrintDocument(
+            document.DisplayName,
+            document.CreateSnapshot(),
+            _pageSettings);
+        var result = _printService.Print(GetNativeWindowHandle(), printableDocument);
+        ReportPrintResult(result, "The document was sent to the printer.");
+    }
+
+    private IntPtr GetNativeWindowHandle() => TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+
+    private void ReportPrintResult(PlatformPrintResult result, string successMessage)
+    {
+        if (result == PlatformPrintResult.Accepted)
+        {
+            DocumentSummary.Text = successMessage;
+        }
+        else if (result is PlatformPrintResult.Failed or PlatformPrintResult.Unavailable)
+        {
+            DocumentSummary.Text = _printService.LastError ?? "The native printing service is unavailable.";
+        }
+
         Editor.Focus();
     }
 
@@ -699,7 +733,7 @@ public partial class MainWindow : Window
                 await SaveAllDocumentsAsync();
                 break;
             case NotepadShortcutIds.Print:
-                ShowUnavailableFeature("Printing");
+                PrintSelectedDocument();
                 break;
             case NotepadShortcutIds.CloseTab:
                 if (TabsList.SelectedItem is NotepadTabItem item)
@@ -754,6 +788,7 @@ public partial class MainWindow : Window
         _externalChangeCheckCancellation?.Cancel();
         _externalChangeCheckCancellation?.Dispose();
         _externalChangesDecision?.TrySetResult(ExternalChangesDecision.Cancel);
+        _printService.Dispose();
         RemoveHandler(KeyDownEvent, OnNotepadKeyDown);
         foreach (var registration in _shortcutRegistrations)
         {

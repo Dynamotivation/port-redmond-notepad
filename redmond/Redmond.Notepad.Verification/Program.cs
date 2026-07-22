@@ -43,6 +43,7 @@ try
 
     VerifyUntitledPreview();
     VerifyPortableEditLogic();
+    VerifyPrintFieldFormatting();
     VerifyShortcutConventions();
 
     Console.WriteLine("Core file verification: passed");
@@ -117,6 +118,25 @@ static void VerifyPortableEditLogic()
     Assert(
         NotepadEditLogic.GetDateTimeText(instant, culture) == instant.ToString(culture),
         "Time/Date must use the current-culture DateTime format from upstream Notepads");
+}
+
+static void VerifyPrintFieldFormatting()
+{
+    var culture = System.Globalization.CultureInfo.GetCultureInfo("en-US");
+    var fields = NotepadPrintFieldFormatter.Format(
+        "&l&f&cPage &p of &P&r&d && &t",
+        new PrintFieldContext(
+            "The Raven.txt",
+            PageNumber: 2,
+            PageCount: 7,
+            new DateTime(2026, 7, 22, 16, 42, 0)),
+        culture);
+
+    Assert(fields.Left == "The Raven.txt", "print fields must expand the document name");
+    Assert(fields.Centre == "Page 2 of 7", "print fields must expand current and total pages");
+    Assert(
+        fields.Right.StartsWith("7/22/2026 & 4:42", StringComparison.Ordinal),
+        "print fields must expand date, time, and escaped ampersands");
 }
 
 static async Task VerifyExternalChangeProtectionAsync(
