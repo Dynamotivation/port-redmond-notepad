@@ -220,13 +220,20 @@
                               CommandParameter="{Binding}"
                               Click="OnCloseTabClick"
                               AutomationProperties.Name="Close tab">
-                        <Path Width="10"
-                              Height="10"
-                              Stretch="Uniform"
-                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
-                              StrokeThickness="1.4"
-                              StrokeLineCap="Round"
-                              Data="M 1,1 L 9,9 M 9,1 L 1,9" />
+                        <Grid>
+                          <Path Width="10"
+                                Height="10"
+                                IsVisible="{Binding ShowCloseGlyph}"
+                                Stretch="Uniform"
+                                Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                StrokeThickness="1.4"
+                                StrokeLineCap="Round"
+                                Data="M 1,1 L 9,9 M 9,1 L 1,9" />
+                          <Ellipse Width="5"
+                                   Height="5"
+                                   IsVisible="{Binding ShowModifiedGlyph}"
+                                   Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                        </Grid>
                       </Button>
                       <Border Grid.ColumnSpan="2"
                               Width="1"
@@ -341,11 +348,20 @@
         <Button Classes="chrome" Content="File">
           <Button.Flyout>
             <MenuFlyout Placement="BottomEdgeAlignedLeft">
-              <MenuItem Header="New tab" Click="OnNewTabClick" />
-              <MenuItem Header="Open…" Click="OnOpenFilesClick" />
+              <MenuItem x:Name="NewTabMenuItem" Header="New tab" Click="OnNewTabClick" />
+              <MenuItem x:Name="NewWindowMenuItem" Header="New window" Click="OnNewWindowClick" />
+              <MenuItem x:Name="OpenMenuItem" Header="Open" Click="OnOpenFilesClick" />
               <MenuItem Header="-" />
-              <MenuItem Header="Save" Click="OnSaveClick" />
-              <MenuItem Header="Save as…" Click="OnSaveAsClick" />
+              <MenuItem x:Name="SaveMenuItem" Header="Save" Click="OnSaveClick" />
+              <MenuItem x:Name="SaveAsMenuItem" Header="Save as" Click="OnSaveAsClick" />
+              <MenuItem x:Name="SaveAllMenuItem" Header="Save all" Click="OnSaveAllClick" />
+              <MenuItem Header="-" />
+              <MenuItem Header="Page setup" Click="OnPageSetupClick" />
+              <MenuItem x:Name="PrintMenuItem" Header="Print" Click="OnPrintClick" />
+              <MenuItem Header="-" />
+              <MenuItem x:Name="CloseTabMenuItem" Header="Close tab" Click="OnCloseSelectedTabClick" />
+              <MenuItem x:Name="CloseWindowMenuItem" Header="Close window" Click="OnCloseWindowClick" />
+              <MenuItem Header="Exit" Click="OnExitClick" />
             </MenuFlyout>
           </Button.Flyout>
         </Button>

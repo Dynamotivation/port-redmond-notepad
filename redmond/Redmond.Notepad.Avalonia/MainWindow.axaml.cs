@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -12,6 +13,7 @@ using Redmond.Avalonia.Controls;
 using Redmond.Avalonia.Windowing;
 using Redmond.Notepad.Core;
 using Redmond.Notepad.Editor.AvaloniaEdit;
+using Redmond.Shortcuts;
 
 namespace Redmond.Notepad.Avalonia;
 
@@ -25,6 +27,8 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<NotepadTabItem> _tabs = [];
     private readonly ITextFileStore _fileStore = new PhysicalTextFileStore();
     private readonly IReadOnlyList<DocumentFileReference> _initialFiles;
+    private readonly IShortcutService _shortcutService;
+    private readonly IReadOnlyList<IDisposable> _shortcutRegistrations;
     private readonly WindowAppearanceController _appearanceController;
     private WindowAppearanceOptions _appearance;
     private AppThemePreference _themePreference;
@@ -47,6 +51,12 @@ public partial class MainWindow : Window
             .ToArray();
         _workspace = new NotepadWorkspace(new AvaloniaEditTextBufferFactory());
         InitializeComponent();
+        _shortcutService = ShortcutServices.CreateForCurrentPlatform();
+        _shortcutRegistrations = NotepadShortcutCatalog.CreateDefinitions()
+            .Select(definition => _shortcutService.Register(definition))
+            .ToArray();
+        ConfigureFileMenuShortcuts();
+        AddHandler(KeyDownEvent, OnNotepadKeyDown, RoutingStrategies.Tunnel);
         _appearance = NotepadSettingsStore.LoadAppearance();
         _themePreference = NotepadSettingsStore.LoadThemePreference();
         _appearanceController = WindowAppearanceController.Attach(this, WindowSurface, _appearance);
@@ -68,6 +78,7 @@ public partial class MainWindow : Window
         Opened += OnOpened;
         Closing += OnWindowClosing;
         PropertyChanged += OnWindowPropertyChanged;
+        Closed += OnWindowClosed;
         LoadSelectedTab();
         RefreshDocumentStatus();
     }
@@ -129,7 +140,9 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnNewTabClick(object? sender, RoutedEventArgs e)
+    private void OnNewTabClick(object? sender, RoutedEventArgs e) => CreateNewTab();
+
+    private void CreateNewTab()
     {
         var tab = _workspace.CreateTab();
         var item = new NotepadTabItem(tab);
@@ -140,7 +153,14 @@ public partial class MainWindow : Window
         ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
     }
 
+    private void OnNewWindowClick(object? sender, RoutedEventArgs e) => OpenNewWindow();
+
+    private static void OpenNewWindow() => new MainWindow().Show();
+
     private async void OnOpenFilesClick(object? sender, RoutedEventArgs e)
+        => await PickAndOpenFilesAsync();
+
+    private async Task PickAndOpenFilesAsync()
     {
         if (_filePicker is null)
         {
@@ -217,9 +237,28 @@ public partial class MainWindow : Window
     private async void OnSaveAsClick(object? sender, RoutedEventArgs e) =>
         await SaveSelectedDocumentAsync(forcePicker: true);
 
-    private async Task<bool> SaveSelectedDocumentAsync(bool forcePicker)
+    private async void OnSaveAllClick(object? sender, RoutedEventArgs e)
+        => await SaveAllDocumentsAsync();
+
+    private async Task SaveAllDocumentsAsync()
     {
-        var document = _workspace.SelectedTab.Document;
+        foreach (var item in _tabs.Where(candidate => candidate.Tab.Document.IsModified).ToArray())
+        {
+            if (!await SaveDocumentAsync(item, forcePicker: false))
+            {
+                break;
+            }
+        }
+    }
+
+    private Task<bool> SaveSelectedDocumentAsync(bool forcePicker) =>
+        SaveDocumentAsync(
+            (NotepadTabItem)TabsList.SelectedItem!,
+            forcePicker);
+
+    private async Task<bool> SaveDocumentAsync(NotepadTabItem item, bool forcePicker)
+    {
+        var document = item.Tab.Document;
         var destination = forcePicker ? null : document.File;
         if (destination is null)
         {
@@ -229,7 +268,7 @@ public partial class MainWindow : Window
             }
 
             destination = await _filePicker.PickSaveFileAsync(
-                document.File?.DisplayName ?? $"{NotepadDocument.UntitledName}.txt");
+                document.SuggestedFileName);
             if (destination is null)
             {
                 return false;
@@ -239,13 +278,13 @@ public partial class MainWindow : Window
         try
         {
             await document.SaveAsync(_fileStore, destination);
-            if (TabsList.SelectedItem is NotepadTabItem item)
-            {
-                item.RefreshTitle();
-            }
+            item.RefreshTitle();
 
-            UpdateDocumentTitle();
-            RefreshDocumentStatus();
+            if (ReferenceEquals(item.Tab, _workspace.SelectedTab))
+            {
+                UpdateDocumentTitle();
+                RefreshDocumentStatus();
+            }
             return true;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or EncoderFallbackException)
@@ -262,6 +301,20 @@ public partial class MainWindow : Window
             return;
         }
 
+        await TryCloseTabAsync(item);
+        e.Handled = true;
+    }
+
+    private async void OnCloseSelectedTabClick(object? sender, RoutedEventArgs e)
+    {
+        if (TabsList.SelectedItem is NotepadTabItem item)
+        {
+            await TryCloseTabAsync(item);
+        }
+    }
+
+    private async Task TryCloseTabAsync(NotepadTabItem item)
+    {
         if (item.Tab.Document.IsModified)
         {
             TabsList.SelectedItem = item;
@@ -275,7 +328,112 @@ public partial class MainWindow : Window
         }
 
         CloseTab(item);
-        e.Handled = true;
+    }
+
+    private void OnCloseWindowClick(object? sender, RoutedEventArgs e) => Close();
+
+    private void OnPageSetupClick(object? sender, RoutedEventArgs e) =>
+        ShowUnavailableFeature("Page setup");
+
+    private void OnPrintClick(object? sender, RoutedEventArgs e) =>
+        ShowUnavailableFeature("Printing");
+
+    private void ShowUnavailableFeature(string feature)
+    {
+        DocumentSummary.Text = $"{feature} is not available in this preview.";
+        Editor.Focus();
+    }
+
+    private void OnExitClick(object? sender, RoutedEventArgs e)
+    {
+        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            foreach (var window in desktop.Windows.ToArray())
+            {
+                window.Close();
+            }
+        }
+        else
+        {
+            Close();
+        }
+    }
+
+    private void ConfigureFileMenuShortcuts()
+    {
+        Apply(NewTabMenuItem, NotepadShortcutIds.NewTab);
+        Apply(NewWindowMenuItem, NotepadShortcutIds.NewWindow);
+        Apply(OpenMenuItem, NotepadShortcutIds.Open);
+        Apply(SaveMenuItem, NotepadShortcutIds.Save);
+        Apply(SaveAsMenuItem, NotepadShortcutIds.SaveAs);
+        Apply(SaveAllMenuItem, NotepadShortcutIds.SaveAll);
+        Apply(PrintMenuItem, NotepadShortcutIds.Print);
+        Apply(CloseTabMenuItem, NotepadShortcutIds.CloseTab);
+        Apply(CloseWindowMenuItem, NotepadShortcutIds.CloseWindow);
+        return;
+
+        void Apply(MenuItem item, string shortcutId) =>
+            item.InputGesture = AvaloniaShortcutAdapter.ToKeyGesture(_shortcutService.GetGesture(shortcutId));
+    }
+
+    private async void OnNotepadKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (UnsavedChangesOverlay.IsVisible
+            || SettingsPage.IsVisible
+            || !AvaloniaShortcutAdapter.TryCreateInput(e, out var input))
+        {
+            return;
+        }
+
+        var result = _shortcutService.Process(input);
+        if (!result.WasMatched)
+        {
+            return;
+        }
+
+        e.Handled = result.Handled;
+        switch (result[0].ShortcutId)
+        {
+            case NotepadShortcutIds.NewTab:
+                CreateNewTab();
+                break;
+            case NotepadShortcutIds.NewWindow:
+                OpenNewWindow();
+                break;
+            case NotepadShortcutIds.Open:
+                await PickAndOpenFilesAsync();
+                break;
+            case NotepadShortcutIds.Save:
+                await SaveSelectedDocumentAsync(forcePicker: false);
+                break;
+            case NotepadShortcutIds.SaveAs:
+                await SaveSelectedDocumentAsync(forcePicker: true);
+                break;
+            case NotepadShortcutIds.SaveAll:
+                await SaveAllDocumentsAsync();
+                break;
+            case NotepadShortcutIds.Print:
+                ShowUnavailableFeature("Printing");
+                break;
+            case NotepadShortcutIds.CloseTab:
+                if (TabsList.SelectedItem is NotepadTabItem item)
+                {
+                    await TryCloseTabAsync(item);
+                }
+                break;
+            case NotepadShortcutIds.CloseWindow:
+                Close();
+                break;
+        }
+    }
+
+    private void OnWindowClosed(object? sender, EventArgs e)
+    {
+        RemoveHandler(KeyDownEvent, OnNotepadKeyDown);
+        foreach (var registration in _shortcutRegistrations)
+        {
+            registration.Dispose();
+        }
     }
 
     private void CloseTab(NotepadTabItem item)
@@ -573,8 +731,7 @@ public partial class MainWindow : Window
     private void UpdateDocumentTitle()
     {
         var document = _workspace.SelectedTab.Document;
-        var modified = document.IsModified ? "*" : string.Empty;
-        Title = $"{modified}{document.DisplayName} - Notepad";
+        Title = $"{document.DisplayName} - Notepad";
     }
 }
 
@@ -585,10 +742,18 @@ internal sealed class NotepadTabItem(NotepadTab tab) : INotifyPropertyChanged
 
     public NotepadTab Tab { get; } = tab;
 
-    public string Title => Tab.Document.IsModified ? $"*{Tab.Title}" : Tab.Title;
+    public string Title => Tab.Title;
 
-    public void RefreshTitle() =>
+    public bool ShowCloseGlyph => !Tab.Document.IsModified;
+
+    public bool ShowModifiedGlyph => Tab.Document.IsModified;
+
+    public void RefreshTitle()
+    {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Title)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowCloseGlyph)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowModifiedGlyph)));
+    }
 
     public bool ShowLeadingSeparator
     {

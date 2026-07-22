@@ -1,6 +1,7 @@
 using System.Text;
 using Notepads.Utilities;
 using Redmond.Notepad.Core;
+using Redmond.Shortcuts;
 
 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
@@ -40,11 +41,54 @@ try
         "one\rtwo\rthree",
         expectedPreamble: [0xFE, 0xFF]);
 
+    VerifyUntitledPreview();
+    VerifyShortcutConventions();
+
     Console.WriteLine("Core file verification: passed");
 }
 finally
 {
     Directory.Delete(verificationDirectory, recursive: true);
+}
+
+static void VerifyUntitledPreview()
+{
+    var document = new NotepadDocument(new StringTextBuffer("\r\n   \n  A title/with an invalid separator\r\nignored"));
+    Assert(document.DisplayName == "A titlewith an invalid separator",
+        "untitled preview must use and sanitize the first non-empty line");
+    Assert(document.SuggestedFileName == "A titlewith an invalid separator.txt",
+        "untitled preview must become the Save As suggestion");
+
+    document.LoadText(string.Empty);
+    Assert(document.DisplayName == NotepadDocument.UntitledName,
+        "empty documents must retain the Untitled title");
+    Assert(document.SuggestedFileName == "Untitled.txt",
+        "empty documents must retain the Untitled Save As suggestion");
+}
+
+static void VerifyShortcutConventions()
+{
+    var definitions = NotepadShortcutCatalog.CreateDefinitions();
+    var windows = new ShortcutService(ShortcutPlatform.Windows);
+    var macOS = new ShortcutService(ShortcutPlatform.MacOS);
+    foreach (var definition in definitions)
+    {
+        windows.Register(definition);
+        macOS.Register(definition);
+    }
+
+    Assert(windows.GetGestureDisplayText(NotepadShortcutIds.NewTab) == "Ctrl+N",
+        "Windows new-tab shortcut must preserve the reference Notepad binding");
+    Assert(macOS.GetGestureDisplayText(NotepadShortcutIds.NewTab) == "⌘T",
+        "macOS new-tab shortcut must follow the native tab convention");
+    Assert(macOS.GetGestureDisplayText(NotepadShortcutIds.NewWindow) == "⌘N",
+        "macOS new-window shortcut must follow the native document-window convention");
+    Assert(macOS.GetGestureDisplayText(NotepadShortcutIds.SaveAll) == "⌥⌘S",
+        "macOS Save All must avoid Windows Control/Alt semantics");
+    Assert(windows.GetConflicts().Count == 0 && macOS.GetConflicts().Count == 0,
+        "Notepad shortcut catalogs must not contain duplicate active gestures");
+    Assert(macOS.ValidateConventions().All(issue => issue.Severity != ShortcutConventionSeverity.Error),
+        "macOS shortcut catalog must avoid reserved or conflicting system gestures");
 }
 
 static async Task VerifyRoundTripAsync(
