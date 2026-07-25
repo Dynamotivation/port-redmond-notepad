@@ -284,10 +284,6 @@ public partial class MainWindow
         if (_nativeFindPreviousItem is not null) _nativeFindPreviousItem.IsEnabled = Editor.CanSearch;
         if (_nativeReplaceItem is not null) _nativeReplaceItem.IsEnabled = Editor.CanSearch;
         if (_nativeGoToItem is not null) _nativeGoToItem.IsEnabled = Editor.Document?.LineCount > 0;
-        if (_nativeClearFormattingItem is not null)
-        {
-            _nativeClearFormattingItem.IsVisible = _viewOptions.FormattingEnabled;
-        }
     }
 
     private void RefreshNativeViewMenu()

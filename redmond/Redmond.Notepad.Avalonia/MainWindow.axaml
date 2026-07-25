@@ -103,17 +103,18 @@
     <Style Selector="Menu.documentMenu > MenuItem /template/ Popup#PART_Popup">
       <Setter Property="VerticalOffset" Value="3" />
     </Style>
-    <!-- Use the same three-point, 1.5 px stroked geometry as the shared
-         AnimatedSettingsExpander, transposed to face into the submenu. -->
+    <!-- Keep Avalonia's stock Fluent submenu chevron, only reducing its
+         vertical extent to match the more compact Windows Notepad glyph. -->
     <Style Selector="Path#PART_ChevronPath">
-      <Setter Property="Width" Value="7" />
+      <Setter Property="RenderTransformOrigin" Value="50%,50%" />
+      <Setter Property="RenderTransform" Value="scale(1,0.6)" />
+    </Style>
+    <!-- Avalonia's Fluent theme gives checked-menu glyphs a 16 px presenter.
+         Preserve its 28 px column footprint while centering a 12 px glyph. -->
+    <Style Selector="MenuItem /template/ ContentControl#PART_ToggleIconPresenter">
+      <Setter Property="Width" Value="12" />
       <Setter Property="Height" Value="12" />
-      <Setter Property="Data" Value="M 1,1 L 6,6 L 1,11" />
-      <Setter Property="Fill" Value="Transparent" />
-      <Setter Property="Stroke" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=MenuItem}}" />
-      <Setter Property="StrokeThickness" Value="1.5" />
-      <Setter Property="StrokeLineCap" Value="Round" />
-      <Setter Property="Stretch" Value="Uniform" />
+      <Setter Property="Margin" Value="2,0,14,0" />
     </Style>
     <Style Selector="Separator.menuDivider">
       <Setter Property="Height" Value="1" />
