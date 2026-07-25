@@ -15,6 +15,7 @@ using Redmond.Avalonia.Windowing;
 using Redmond.Notepad.Core;
 using Redmond.Notepad.Editor.AvaloniaEdit;
 using Redmond.Notepad.Avalonia.Printing;
+using Redmond.Notepad.Avalonia.SpellChecking;
 using Redmond.Shortcuts;
 
 namespace Redmond.Notepad.Avalonia;
@@ -39,12 +40,14 @@ public partial class MainWindow : Window
     private readonly IReadOnlyList<IDisposable> _shortcutRegistrations;
     private readonly WindowAppearanceController _appearanceController;
     private readonly IPlatformPrintService _printService;
+    private readonly SpellCheckEditorController _spellCheckController;
     private RecentFileList _recentFiles;
     private WindowAppearanceOptions _appearance;
     private NotepadPageSettings _pageSettings = new();
     private NotepadViewOptions _viewOptions;
     private NotepadFontOptions _fontOptions;
     private NotepadOpeningOptions _openingOptions;
+    private NotepadSpellingOptions _spellingOptions;
     private AppThemePreference _themePreference;
     private bool _recentFilesEnabled;
     private bool _useNativeMacOSMenuBar;
@@ -91,6 +94,10 @@ public partial class MainWindow : Window
             .Select(definition => _shortcutService.Register(definition))
             .ToArray();
         _printService = PlatformPrintServiceFactory.Create();
+        _spellCheckController = new SpellCheckEditorController(
+            Editor,
+            PlatformSpellCheckServiceFactory.Create());
+        Editor.TextArea.RightClickMovesCaret = true;
         ConfigureFileMenuShortcuts();
         Resources["CloseTabToolTip"] = FormatCommandToolTip("Close tab", NotepadShortcutIds.CloseTab);
         Resources["NewTabToolTip"] = FormatCommandToolTip("New tab", NotepadShortcutIds.NewTab);
@@ -102,6 +109,7 @@ public partial class MainWindow : Window
         _viewOptions = NotepadSettingsStore.LoadViewOptions();
         _fontOptions = NotepadSettingsStore.LoadFontOptions();
         _openingOptions = NotepadSettingsStore.LoadOpeningOptions();
+        _spellingOptions = NotepadSettingsStore.LoadSpellingOptions();
         _useNativeMacOSMenuBar = NotepadSettingsStore.LoadUseNativeMacOSMenuBar();
         _recentFiles = NotepadSettingsStore.LoadRecentFiles();
         _recentFilesEnabled = NotepadSettingsStore.LoadRecentFilesEnabled();
@@ -115,6 +123,7 @@ public partial class MainWindow : Window
         SettingsPage.SetUseNativeMacOSMenuBar(_useNativeMacOSMenuBar);
         SettingsPage.SetFontOptions(_fontOptions);
         SettingsPage.SetOpeningOptions(_openingOptions);
+        SettingsPage.SetSpellingOptions(_spellingOptions);
         SettingsPage.AppearanceChanged += OnAppearanceChanged;
         SettingsPage.ThemeChanged += OnThemeChanged;
         SettingsPage.RecentFilesEnabledChanged += OnRecentFilesEnabledChanged;
@@ -123,9 +132,11 @@ public partial class MainWindow : Window
         SettingsPage.NativeMacOSMenuBarChanged += OnNativeMacOSMenuBarChanged;
         SettingsPage.FontOptionsChanged += OnFontOptionsChanged;
         SettingsPage.OpeningOptionsChanged += OnOpeningOptionsChanged;
+        SettingsPage.SpellingOptionsChanged += OnSpellingOptionsChanged;
         NotepadSettingsStore.FontOptionsChanged += OnGlobalFontOptionsChanged;
         NotepadSettingsStore.OpeningOptionsChanged += OnGlobalOpeningOptionsChanged;
         NotepadSettingsStore.NativeMacOSMenuBarChanged += OnGlobalNativeMacOSMenuBarChanged;
+        NotepadSettingsStore.SpellingOptionsChanged += OnGlobalSpellingOptionsChanged;
         foreach (var tab in _workspace.Tabs)
         {
             _tabs.Add(CreateTabItem(tab));
@@ -177,6 +188,7 @@ public partial class MainWindow : Window
         SettingsPage.SetUseNativeMacOSMenuBar(_useNativeMacOSMenuBar);
         SettingsPage.SetFontOptions(_fontOptions);
         SettingsPage.SetOpeningOptions(_openingOptions);
+        SettingsPage.SetSpellingOptions(_spellingOptions);
         DocumentTitleBar.IsVisible = false;
         DocumentPage.IsVisible = false;
         SettingsTitleBar.IsVisible = true;
@@ -264,6 +276,16 @@ public partial class MainWindow : Window
     {
         _openingOptions = options;
         SettingsPage.SetOpeningOptions(options);
+    }
+
+    private void OnSpellingOptionsChanged(object? sender, NotepadSpellingOptions options) =>
+        NotepadSettingsStore.SaveSpellingOptions(options);
+
+    private void OnGlobalSpellingOptionsChanged(object? sender, NotepadSpellingOptions options)
+    {
+        _spellingOptions = options;
+        SettingsPage.SetSpellingOptions(options);
+        ApplySpellCheckPolicy();
     }
 
     private void OnWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
@@ -765,6 +787,76 @@ public partial class MainWindow : Window
         RestoreZoomMenuItem.IsEnabled = _viewOptions.ZoomPercent != 100;
     }
 
+    private void OnEditorContextMenuOpened(object? sender, RoutedEventArgs e)
+    {
+        var issue = _spellCheckController.GetIssueAt(Editor.CaretOffset)
+            ?? _spellCheckController.GetIssueAt(Math.Max(0, Editor.CaretOffset - 1));
+        var items = new List<object>();
+        if (issue is not null)
+        {
+            var suggestions = _spellCheckController.Suggest(issue);
+            if (suggestions.Count == 0)
+            {
+                items.Add(new MenuItem { Header = "No spelling suggestions", IsEnabled = false });
+            }
+            else
+            {
+                foreach (var suggestion in suggestions)
+                {
+                    var suggestionItem = new MenuItem { Header = suggestion };
+                    suggestionItem.Click += (_, _) => ReplaceSpellingIssue(issue, suggestion);
+                    items.Add(suggestionItem);
+                }
+            }
+
+            items.Add(new Separator());
+            var ignoreItem = new MenuItem { Header = "Ignore" };
+            ignoreItem.Click += (_, _) => _spellCheckController.Ignore(issue);
+            items.Add(ignoreItem);
+            var addItem = new MenuItem { Header = "Add to dictionary" };
+            addItem.Click += (_, _) => _spellCheckController.AddToDictionary(issue);
+            items.Add(addItem);
+            items.Add(new Separator());
+        }
+
+        items.Add(CreateEditorContextCommand("Cut", Editor.SelectionLength > 0, CutEditor));
+        items.Add(CreateEditorContextCommand("Copy", Editor.SelectionLength > 0, Editor.Copy));
+        items.Add(CreateEditorContextCommand("Paste", Editor.CanPaste, PasteEditor));
+        items.Add(CreateEditorContextCommand("Delete", Editor.SelectionLength > 0, DeleteEditor));
+        items.Add(new Separator());
+        items.Add(CreateEditorContextCommand("Select all", true, Editor.SelectAll));
+        EditorContextMenu.Items.Clear();
+        foreach (var item in items)
+        {
+            EditorContextMenu.Items.Add(item);
+        }
+    }
+
+    private static MenuItem CreateEditorContextCommand(string header, bool enabled, Action action)
+    {
+        var item = new MenuItem { Header = header, IsEnabled = enabled };
+        item.Click += (_, _) => action();
+        return item;
+    }
+
+    private void ReplaceSpellingIssue(SpellingIssue issue, string replacement)
+    {
+        if (Editor.Document is null || issue.Start < 0 || issue.End > Editor.Document.TextLength)
+        {
+            return;
+        }
+
+        using (Editor.Document.RunUpdate())
+        {
+            Editor.Document.Replace(issue.Start, issue.Length, replacement);
+        }
+
+        Editor.SelectionStart = issue.Start + replacement.Length;
+        Editor.SelectionLength = 0;
+        RefreshAfterEditorCommand();
+        _spellCheckController.Refresh();
+    }
+
     private void OnZoomInClick(object? sender, RoutedEventArgs e) => ChangeZoom(ZoomStep);
 
     private void OnZoomOutClick(object? sender, RoutedEventArgs e) => ChangeZoom(-ZoomStep);
@@ -1217,10 +1309,12 @@ public partial class MainWindow : Window
         NotepadSettingsStore.FontOptionsChanged -= OnGlobalFontOptionsChanged;
         NotepadSettingsStore.OpeningOptionsChanged -= OnGlobalOpeningOptionsChanged;
         NotepadSettingsStore.NativeMacOSMenuBarChanged -= OnGlobalNativeMacOSMenuBarChanged;
+        NotepadSettingsStore.SpellingOptionsChanged -= OnGlobalSpellingOptionsChanged;
         _externalChangeCheckCancellation?.Cancel();
         _externalChangeCheckCancellation?.Dispose();
         _externalChangesDecision?.TrySetResult(ExternalChangesDecision.Cancel);
         _printService.Dispose();
+        _spellCheckController.Dispose();
         RemoveHandler(KeyDownEvent, OnNotepadKeyDown);
         RemoveHandler(PointerMovedEvent, OnWindowPointerMoved);
         PointerExited -= OnWindowPointerExited;
@@ -1812,7 +1906,17 @@ public partial class MainWindow : Window
         {
             item.RefreshTitle();
         }
+        ApplySpellCheckPolicy();
         Editor.Focus();
+    }
+
+    private void ApplySpellCheckPolicy()
+    {
+        var path = _workspace.SelectedTab.Document.File?.Path;
+        var enabled = _spellingOptions.IsEnabledForPath(path);
+        _spellCheckController.SetEnabled(enabled);
+        _spellCheckController.SetAutocorrectMode(
+            enabled ? _spellingOptions.AutocorrectMode : AutocorrectMode.Off);
     }
 
     private void UpdateWindowPresentation()
@@ -1847,6 +1951,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        _spellCheckController.Refresh();
         RefreshAfterEditorCommand(focusEditor: false);
     }
 

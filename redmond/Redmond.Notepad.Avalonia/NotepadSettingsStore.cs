@@ -20,12 +20,15 @@ internal static class NotepadSettingsStore
     private static readonly string OpeningPath = Path.Combine(SettingsDirectory, "opening.json");
     private static readonly string SessionPath = Path.Combine(SettingsDirectory, "session.json");
     private static readonly string NativeMacOSMenuBarPath = Path.Combine(SettingsDirectory, "native-macos-menu-bar.txt");
+    private static readonly string SpellingPath = Path.Combine(SettingsDirectory, "spelling.json");
 
     public static event EventHandler<NotepadFontOptions>? FontOptionsChanged;
 
     public static event EventHandler<NotepadOpeningOptions>? OpeningOptionsChanged;
 
     public static event EventHandler<bool>? NativeMacOSMenuBarChanged;
+
+    public static event EventHandler<NotepadSpellingOptions>? SpellingOptionsChanged;
 
     public static AppThemePreference LoadThemePreference()
     {
@@ -357,6 +360,31 @@ internal static class NotepadSettingsStore
         options = options.Normalized();
         TrySaveJson(OpeningPath, options);
         OpeningOptionsChanged?.Invoke(null, options);
+    }
+
+    public static NotepadSpellingOptions LoadSpellingOptions()
+    {
+        try
+        {
+            return File.Exists(SpellingPath)
+                ? (JsonSerializer.Deserialize<NotepadSpellingOptions>(File.ReadAllText(SpellingPath))
+                    ?? new NotepadSpellingOptions()).Normalized()
+                : new NotepadSpellingOptions();
+        }
+        catch (Exception exception) when (exception is IOException
+            or UnauthorizedAccessException
+            or JsonException
+            or NotSupportedException)
+        {
+            return new NotepadSpellingOptions();
+        }
+    }
+
+    public static void SaveSpellingOptions(NotepadSpellingOptions options)
+    {
+        options = options.Normalized();
+        TrySaveJson(SpellingPath, options);
+        SpellingOptionsChanged?.Invoke(null, options);
     }
 
     public static NotepadSessionState LoadSession()

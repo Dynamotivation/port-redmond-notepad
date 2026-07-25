@@ -3,6 +3,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using System.Collections.ObjectModel;
 using Redmond.Avalonia.Controls;
+using Redmond.Notepad.Core;
 
 namespace Redmond.Notepad.Avalonia;
 
@@ -13,6 +14,7 @@ public partial class SettingsPage : UserControl
     private bool _isUpdatingTheme;
     private bool _isUpdatingFont;
     private bool _isUpdatingDocumentOptions;
+    private bool _isUpdatingSpelling;
 
     public SettingsPage()
     {
@@ -48,6 +50,8 @@ public partial class SettingsPage : UserControl
 
     internal event EventHandler<NotepadFontOptions>? FontOptionsChanged;
 
+    internal event EventHandler<NotepadSpellingOptions>? SpellingOptionsChanged;
+
     public void SetAppearance(WindowAppearanceOptions appearance) =>
         WindowAppearancePanel.SetOptions(appearance);
 
@@ -68,6 +72,21 @@ public partial class SettingsPage : UserControl
 
     public void SetUseNativeMacOSMenuBar(bool enabled) =>
         NativeMacOSMenuBarToggle.IsChecked = enabled;
+
+    internal void SetSpellingOptions(NotepadSpellingOptions options)
+    {
+        options = options.Normalized();
+        _isUpdatingSpelling = true;
+        SpellCheckToggle.IsChecked = options.Enabled;
+        TxtSpellCheckToggle.IsChecked = options.TxtEnabled;
+        MarkdownSpellCheckToggle.IsChecked = options.MarkdownEnabled;
+        SubtitleSpellCheckToggle.IsChecked = options.SubtitleEnabled;
+        LyricsSpellCheckToggle.IsChecked = options.LyricsEnabled;
+        LicenseSpellCheckToggle.IsChecked = options.LicenseEnabled;
+        AutocorrectModeComboBox.SelectedIndex = (int)options.AutocorrectMode;
+        SetSpellingChildrenEnabled(options.Enabled);
+        _isUpdatingSpelling = false;
+    }
 
     internal void SetOpeningOptions(NotepadOpeningOptions options)
     {
@@ -133,6 +152,49 @@ public partial class SettingsPage : UserControl
 
     private void OnNativeMacOSMenuBarToggleClick(object? sender, RoutedEventArgs e) =>
         NativeMacOSMenuBarChanged?.Invoke(this, NativeMacOSMenuBarToggle.IsChecked == true);
+
+    private void OnSpellingToggleClick(object? sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (_isUpdatingSpelling)
+        {
+            return;
+        }
+
+        RaiseSpellingOptionsChanged();
+    }
+
+    private void RaiseSpellingOptionsChanged()
+    {
+        var enabled = SpellCheckToggle.IsChecked == true;
+        SetSpellingChildrenEnabled(enabled);
+        SpellingOptionsChanged?.Invoke(this, new NotepadSpellingOptions(
+            enabled,
+            TxtSpellCheckToggle.IsChecked == true,
+            MarkdownSpellCheckToggle.IsChecked == true,
+            SubtitleSpellCheckToggle.IsChecked == true,
+            LyricsSpellCheckToggle.IsChecked == true,
+            LicenseSpellCheckToggle.IsChecked == true,
+            (AutocorrectMode)Math.Max(0, AutocorrectModeComboBox.SelectedIndex)));
+    }
+
+    private void OnAutocorrectModeSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (!_isUpdatingSpelling)
+        {
+            RaiseSpellingOptionsChanged();
+        }
+    }
+
+    private void SetSpellingChildrenEnabled(bool enabled)
+    {
+        TxtSpellCheckToggle.IsEnabled = enabled;
+        MarkdownSpellCheckToggle.IsEnabled = enabled;
+        SubtitleSpellCheckToggle.IsEnabled = enabled;
+        LyricsSpellCheckToggle.IsEnabled = enabled;
+        LicenseSpellCheckToggle.IsEnabled = enabled;
+        AutocorrectModeComboBox.IsEnabled = enabled;
+    }
 
     private void OnOpeningFilesSelectionChanged(object? sender, SelectionChangedEventArgs e) =>
         RaiseOpeningOptionsChanged();

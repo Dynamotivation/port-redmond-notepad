@@ -155,9 +155,18 @@
         </shared:SettingsCard>
 
         <TextBlock Classes="sectionHeading" Text="Spelling" />
-        <shared:AnimatedSettingsExpander Header="Spell check"
-                                         Padding="0"
+        <shared:AnimatedSettingsExpander Padding="0"
                                          IsExpanded="True">
+          <shared:AnimatedSettingsExpander.Header>
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock VerticalAlignment="Center" Text="Spell check" />
+              <ToggleSwitch x:Name="SpellCheckToggle"
+                            Grid.Column="1"
+                            Margin="12,0,0,0"
+                            Classes="settingToggle"
+                            Click="OnSpellingToggleClick" />
+            </Grid>
+          </shared:AnimatedSettingsExpander.Header>
           <shared:AnimatedSettingsExpander.Icon>
             <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="13" Text="ABC✓" />
           </shared:AnimatedSettingsExpander.Icon>
@@ -165,41 +174,62 @@
             <Border Classes="spellingRow">
               <Grid Margin="68,0,16,0" ColumnDefinitions="*,Auto">
                 <TextBlock VerticalAlignment="Center" Text=".txt" />
-                <ToggleSwitch Grid.Column="1" Classes="settingToggle" />
+                <ToggleSwitch x:Name="TxtSpellCheckToggle"
+                              Grid.Column="1"
+                              Classes="settingToggle"
+                              Click="OnSpellingToggleClick" />
               </Grid>
             </Border>
             <Border Classes="spellingRow">
               <Grid Margin="68,0,16,0" ColumnDefinitions="*,Auto">
                 <TextBlock VerticalAlignment="Center" Text=".md" />
-                <ToggleSwitch Grid.Column="1" Classes="settingToggle" />
+                <ToggleSwitch x:Name="MarkdownSpellCheckToggle"
+                              Grid.Column="1"
+                              Classes="settingToggle"
+                              Click="OnSpellingToggleClick" />
               </Grid>
             </Border>
             <Border Classes="spellingRow">
               <Grid Margin="68,0,16,0" ColumnDefinitions="*,Auto">
                 <TextBlock VerticalAlignment="Center" Text=".srt / .ass" />
-                <ToggleSwitch Grid.Column="1" Classes="settingToggle" />
+                <ToggleSwitch x:Name="SubtitleSpellCheckToggle"
+                              Grid.Column="1"
+                              Classes="settingToggle"
+                              Click="OnSpellingToggleClick" />
               </Grid>
             </Border>
             <Border Classes="spellingRow">
               <Grid Margin="68,0,16,0" ColumnDefinitions="*,Auto">
                 <TextBlock VerticalAlignment="Center" Text=".lrc" />
-                <ToggleSwitch Grid.Column="1" Classes="settingToggle" />
+                <ToggleSwitch x:Name="LyricsSpellCheckToggle"
+                              Grid.Column="1"
+                              Classes="settingToggle"
+                              Click="OnSpellingToggleClick" />
               </Grid>
             </Border>
             <Border Classes="spellingRow">
               <Grid Margin="68,0,16,0" ColumnDefinitions="*,Auto">
                 <TextBlock VerticalAlignment="Center" Text=".lic" />
-                <ToggleSwitch Grid.Column="1" Classes="settingToggle" />
+                <ToggleSwitch x:Name="LicenseSpellCheckToggle"
+                              Grid.Column="1"
+                              Classes="settingToggle"
+                              Click="OnSpellingToggleClick" />
               </Grid>
             </Border>
           </StackPanel>
         </shared:AnimatedSettingsExpander>
         <shared:SettingsCard Header="Autocorrect"
-                             Description="Typos are automatically corrected when spell check is turned on">
+                             Description="Choose how typing mistakes are handled">
           <shared:SettingsCard.Icon>
             <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="18" Text="✎" />
           </shared:SettingsCard.Icon>
-          <ToggleSwitch Classes="settingToggle" />
+          <ComboBox x:Name="AutocorrectModeComboBox"
+                    Width="190"
+                    SelectionChanged="OnAutocorrectModeSelectionChanged">
+            <ComboBoxItem Content="Never correct automatically" />
+            <ComboBoxItem Content="Fix common typing mistakes" />
+            <ComboBoxItem Content="Fix spelling mistakes automatically" />
+          </ComboBox>
         </shared:SettingsCard>
 
         <TextBlock Classes="sectionHeading" Text="Advanced Features" />
