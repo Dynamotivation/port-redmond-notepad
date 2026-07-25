@@ -21,6 +21,8 @@ public sealed class SpellCheckEditorController : IDisposable
     private readonly SpellCheckBackgroundRenderer _renderer;
     private readonly Dictionary<TextDocument, HashSet<string>> _ignoredWords =
         new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<TextDocument, AutocorrectionChange> _autocorrections =
+        new(ReferenceEqualityComparer.Instance);
     private CancellationTokenSource? _checkCancellation;
     private CancellationTokenSource? _autocorrectCancellation;
     private TextDocument? _document;
@@ -48,6 +50,8 @@ public sealed class SpellCheckEditorController : IDisposable
 
     public IReadOnlyList<SpellCheckLanguage> AvailableLanguages => _service.AvailableLanguages;
 
+    public event EventHandler<AutocorrectionChangedEventArgs>? AutocorrectionChanged;
+
     public void SetEnabled(bool enabled)
     {
         _enabled = enabled && _service.IsAvailable;
@@ -58,6 +62,7 @@ public sealed class SpellCheckEditorController : IDisposable
 
         if (!_enabled)
         {
+            ClearAutocorrection(_document);
             ClearIssues();
             return;
         }
@@ -67,6 +72,54 @@ public sealed class SpellCheckEditorController : IDisposable
 
     public void SetAutocorrectMode(AutocorrectMode mode) =>
         _autocorrectMode = _enabled ? mode : AutocorrectMode.Off;
+
+    public AutocorrectionChange? CurrentAutocorrection =>
+        _document is not null && _autocorrections.TryGetValue(_document, out var correction)
+            ? correction
+            : null;
+
+    public bool ChangeBack(AutocorrectionChange correction)
+    {
+        if (_document is null
+            || !_autocorrections.TryGetValue(_document, out var current)
+            || current != correction
+            || correction.Start < 0
+            || correction.Start + correction.Replacement.Length > _document.TextLength
+            || !string.Equals(
+                _document.GetText(correction.Start, correction.Replacement.Length),
+                correction.Replacement,
+                StringComparison.CurrentCulture))
+        {
+            return false;
+        }
+
+        var previousCaretOffset = _editor.CaretOffset;
+        _isApplyingAutocorrect = true;
+        try
+        {
+            using (_document.RunUpdate())
+            {
+                _document.Replace(
+                    correction.Start,
+                    correction.Replacement.Length,
+                    correction.Original);
+            }
+        }
+        finally
+        {
+            _isApplyingAutocorrect = false;
+        }
+
+        _editor.CaretOffset = Math.Clamp(
+            previousCaretOffset >= correction.Start + correction.Replacement.Length
+                ? previousCaretOffset + correction.Original.Length - correction.Replacement.Length
+                : correction.Start + correction.Original.Length,
+            0,
+            _document.TextLength);
+        ClearAutocorrection(_document);
+        ScheduleVisibleCheck(immediate: true);
+        return true;
+    }
 
     public SpellingIssue? GetIssueAt(int offset)
     {
@@ -174,12 +227,14 @@ public sealed class SpellCheckEditorController : IDisposable
             _document.Changed += OnTextDocumentChanged;
         }
         _renderer.SetIssues(_issues);
+        RaiseAutocorrectionChanged();
     }
 
     private void OnTextDocumentChanged(object? sender, DocumentChangeEventArgs e)
     {
         if (!_isApplyingAutocorrect)
         {
+            ClearAutocorrection(_document);
             ScheduleAutocorrect(e);
         }
 
@@ -275,6 +330,9 @@ public sealed class SpellCheckEditorController : IDisposable
                     _isApplyingAutocorrect = false;
                 }
 
+                var correction = new AutocorrectionChange(start, original, replacement);
+                _autocorrections[document] = correction;
+                RaiseAutocorrectionChanged();
                 ScheduleVisibleCheck(immediate: true);
             });
         }
@@ -455,7 +513,37 @@ public sealed class SpellCheckEditorController : IDisposable
         _autocorrectCancellation = null;
     }
 
+    private void ClearAutocorrection(TextDocument? document)
+    {
+        if (document is null || !_autocorrections.Remove(document))
+        {
+            return;
+        }
+
+        if (ReferenceEquals(document, _document))
+        {
+            RaiseAutocorrectionChanged();
+        }
+    }
+
+    private void RaiseAutocorrectionChanged()
+    {
+        var correction = CurrentAutocorrection;
+        _renderer.SetAutocorrection(correction);
+        _editor.TextArea.TextView.InvalidateLayer(KnownLayer.Selection);
+        AutocorrectionChanged?.Invoke(
+            this,
+            new AutocorrectionChangedEventArgs(correction));
+    }
+
     private readonly record struct VisibleRegion(int Start, int Length, string Text);
+}
+
+public sealed record AutocorrectionChange(int Start, string Original, string Replacement);
+
+public sealed class AutocorrectionChangedEventArgs(AutocorrectionChange? correction) : EventArgs
+{
+    public AutocorrectionChange? Correction { get; } = correction;
 }
 
 internal sealed class SpellCheckTextSegment : TextSegment
@@ -472,16 +560,25 @@ internal sealed class SpellCheckBackgroundRenderer : IBackgroundRenderer
         1.15,
         lineCap: PenLineCap.Round,
         lineJoin: PenLineJoin.Round);
+    private static readonly Pen AutocorrectionPen = new(
+        new SolidColorBrush(Color.Parse("#0A84FF")),
+        1.1,
+        lineCap: PenLineCap.Round,
+        lineJoin: PenLineJoin.Round);
 
     private TextSegmentCollection<SpellCheckTextSegment>? _issues;
+    private AutocorrectionChange? _autocorrection;
 
     public KnownLayer Layer => KnownLayer.Selection;
 
     public void SetIssues(TextSegmentCollection<SpellCheckTextSegment>? issues) => _issues = issues;
 
+    public void SetAutocorrection(AutocorrectionChange? correction) =>
+        _autocorrection = correction;
+
     public void Draw(TextView textView, DrawingContext drawingContext)
     {
-        if (_issues is null || textView.Document is null || !textView.VisualLinesValid)
+        if (textView.Document is null || !textView.VisualLinesValid)
         {
             return;
         }
@@ -495,11 +592,29 @@ internal sealed class SpellCheckBackgroundRenderer : IBackgroundRenderer
         var start = visualLines[0].FirstDocumentLine.Offset;
         var lastLine = visualLines[^1].LastDocumentLine;
         var length = lastLine.Offset + lastLine.TotalLength - start;
-        foreach (var issue in _issues.FindOverlappingSegments(start, length))
+        if (_issues is not null)
         {
-            foreach (var rectangle in BackgroundGeometryBuilder.GetRectsForSegment(textView, issue, true))
+            foreach (var issue in _issues.FindOverlappingSegments(start, length))
             {
-                DrawWave(drawingContext, rectangle);
+                foreach (var rectangle in BackgroundGeometryBuilder.GetRectsForSegment(textView, issue, true))
+                {
+                    DrawWave(drawingContext, rectangle);
+                }
+            }
+        }
+
+        if (_autocorrection is { } correction
+            && correction.Start < start + length
+            && correction.Start + correction.Replacement.Length > start)
+        {
+            var segment = new SimpleSegment(correction.Start, correction.Replacement.Length);
+            foreach (var rectangle in BackgroundGeometryBuilder.GetRectsForSegment(textView, segment, true))
+            {
+                var y = Math.Max(rectangle.Top + 1, rectangle.Bottom - 0.75);
+                drawingContext.DrawLine(
+                    AutocorrectionPen,
+                    new Point(rectangle.Left, y),
+                    new Point(rectangle.Right, y));
             }
         }
     }

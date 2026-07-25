@@ -213,6 +213,18 @@
     <Style Selector="Border.statusSurface TextBlock">
       <Setter Property="Foreground" Value="{DynamicResource NotepadSecondaryForegroundBrush}" />
     </Style>
+    <Style Selector="Button.changeBack">
+      <Setter Property="MinHeight" Value="26" />
+      <Setter Property="Padding" Value="10,3" />
+      <Setter Property="Background" Value="{DynamicResource NotepadSelectedTabBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource NotepadSelectedForegroundBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource NotepadDividerBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="5" />
+    </Style>
+    <Style Selector="Button.changeBack:pointerover">
+      <Setter Property="Background" Value="{DynamicResource TabHoverBrush}" />
+    </Style>
     <Style Selector="Border.windowSurface.backdrop Border.tabSeparator">
       <Setter Property="Background" Value="{DynamicResource NotepadMicaDividerBrush}" />
     </Style>
@@ -521,22 +533,31 @@
     <Border Grid.Row="1"
             Classes="editorSurface"
             Padding="14,10">
-    <avaloniaEdit:TextEditor x:Name="Editor"
-                             Background="Transparent"
-                             Foreground="{DynamicResource NotepadEditorForegroundBrush}"
-                             WordWrap="True"
-                             HorizontalScrollBarVisibility="Disabled"
-                             VerticalScrollBarVisibility="Auto"
-                             FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
-                             FontSize="14"
-                             AutomationProperties.Name="Text editor">
-      <avaloniaEdit:TextEditor.ContextMenu>
-        <ContextMenu x:Name="EditorContextMenu"
-                     Opened="OnEditorContextMenuOpened">
-          <MenuItem Header="Select all" />
-        </ContextMenu>
-      </avaloniaEdit:TextEditor.ContextMenu>
-    </avaloniaEdit:TextEditor>
+      <Grid x:Name="EditorOverlay">
+        <avaloniaEdit:TextEditor x:Name="Editor"
+                                 Background="Transparent"
+                                 Foreground="{DynamicResource NotepadEditorForegroundBrush}"
+                                 WordWrap="True"
+                                 HorizontalScrollBarVisibility="Disabled"
+                                 VerticalScrollBarVisibility="Auto"
+                                 FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
+                                 FontSize="14"
+                                 AutomationProperties.Name="Text editor">
+          <avaloniaEdit:TextEditor.ContextMenu>
+            <ContextMenu x:Name="EditorContextMenu"
+                         Opened="OnEditorContextMenuOpened">
+              <MenuItem Header="Select all" />
+            </ContextMenu>
+          </avaloniaEdit:TextEditor.ContextMenu>
+        </avaloniaEdit:TextEditor>
+        <Button x:Name="ChangeBackButton"
+                Classes="changeBack"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Top"
+                IsVisible="False"
+                Click="OnChangeBackClick"
+                AutomationProperties.Name="Change autocorrected word back" />
+      </Grid>
     </Border>
 
     <Border x:Name="StatusBar"
