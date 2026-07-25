@@ -529,7 +529,14 @@
                              VerticalScrollBarVisibility="Auto"
                              FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
                              FontSize="14"
-                             AutomationProperties.Name="Text editor" />
+                             AutomationProperties.Name="Text editor">
+      <avaloniaEdit:TextEditor.ContextMenu>
+        <ContextMenu x:Name="EditorContextMenu"
+                     Opened="OnEditorContextMenuOpened">
+          <MenuItem Header="Select all" />
+        </ContextMenu>
+      </avaloniaEdit:TextEditor.ContextMenu>
+    </avaloniaEdit:TextEditor>
     </Border>
 
     <Border x:Name="StatusBar"

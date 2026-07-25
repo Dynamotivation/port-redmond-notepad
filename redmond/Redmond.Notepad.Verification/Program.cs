@@ -46,6 +46,7 @@ try
     VerifyPortableEditLogic();
     VerifyPrintFieldFormatting();
     VerifyRecentFiles();
+    VerifySpellCheckPrimitives();
     VerifyShortcutConventions();
 
     Console.WriteLine("Core file verification: passed");
@@ -239,6 +240,37 @@ static void VerifyRecentFiles()
         "removed recent files must disappear from the list");
     recentFiles.Clear();
     Assert(recentFiles.Paths.Count == 0, "clearing recent files must empty the list");
+}
+
+static void VerifySpellCheckPrimitives()
+{
+    var words = SpellCheckWordTokenizer.EnumerateWords(
+            "plain l’esprit don't Ελληνικά 中文 123 file.txt")
+        .Select(segment => "plain l’esprit don't Ελληνικά 中文 123 file.txt"
+            .Substring(segment.Start, segment.Length))
+        .ToArray();
+    Assert(words.SequenceEqual(["plain", "l’esprit", "don't", "Ελληνικά", "中文", "file", "txt"]),
+        "spell-check tokenization must preserve Unicode words and inner apostrophes");
+
+    Assert(
+        SpellCheckLanguageSelection.SelectBest(
+            ["de_DE", "en_GB", "en_US"],
+            System.Globalization.CultureInfo.GetCultureInfo("en-US")) == "en_US",
+        "spell-check language selection must match equivalent culture separators");
+    Assert(
+        SpellCheckLanguageSelection.SelectBest(
+            ["de_DE", "en_GB"],
+            System.Globalization.CultureInfo.GetCultureInfo("en-AU")) == "en_GB",
+        "spell-check language selection must fall back to a compatible language");
+
+    Assert(AutocorrectLogic.IsSingleAdjacentTransposition("teh", "the"),
+        "common-typo correction must accept one adjacent letter swap");
+    Assert(AutocorrectLogic.IsSingleAdjacentTransposition("recieve", "receive"),
+        "common-typo correction must accept an adjacent vowel swap");
+    Assert(!AutocorrectLogic.IsSingleAdjacentTransposition("mispelled", "misspelled"),
+        "common-typo correction must not silently add missing letters");
+    Assert(!AutocorrectLogic.IsSingleAdjacentTransposition("form", "fromm"),
+        "common-typo correction must reject replacements with a different length");
 }
 
 static async Task VerifyExternalChangeProtectionAsync(
