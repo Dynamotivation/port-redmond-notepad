@@ -62,19 +62,60 @@ static void VerifyTabScopedSpellCheckOverride()
     var workspace = new NotepadWorkspace();
     var first = workspace.SelectedTab;
     var second = workspace.CreateTab();
+    var third = workspace.CreateTab();
 
     Assert(first.IsSpellCheckEnabledOverride is null
-           && second.IsSpellCheckEnabledOverride is null,
+           && second.IsSpellCheckEnabledOverride is null
+           && third.IsSpellCheckEnabledOverride is null,
         "new tabs must inherit the global spelling policy");
 
     first.IsSpellCheckEnabledOverride = false;
+    first.EditorState.CaretOffset = 12;
+    first.EditorState.SelectionStart = 4;
+    first.EditorState.SelectionLength = 8;
+    first.EditorState.HorizontalOffset = 17;
+    first.EditorState.VerticalOffset = 240;
+    first.EditorState.IgnoredSpellingWords.Add("Redmond");
     workspace.SelectTab(second);
     Assert(second.IsSpellCheckEnabledOverride is null,
         "a spelling override must remain owned by its tab");
 
-    workspace.SelectTab(first);
+    workspace.MoveTab(first, 2);
+    Assert(ReferenceEquals(workspace.Tabs[2], first),
+        "reordering must move the original tab instance");
+
+    var selectedAfterDetach = workspace.DetachTab(first);
+    Assert(!workspace.Tabs.Contains(first) && ReferenceEquals(selectedAfterDetach, second),
+        "detaching a background tab must preserve the selected tab");
+
+    var target = new NotepadWorkspace();
+    target.AttachTab(first, 0);
+    Assert(ReferenceEquals(target.SelectedTab, first)
+           && ReferenceEquals(target.Tabs[0], first),
+        "attaching must transfer the original tab instance");
+
+    Assert(first.EditorState.CaretOffset == 12
+           && first.EditorState.SelectionStart == 4
+           && first.EditorState.SelectionLength == 8
+           && first.EditorState.HorizontalOffset == 17
+           && first.EditorState.VerticalOffset == 240
+           && first.EditorState.IgnoredSpellingWords.Contains("Redmond"),
+        "transferring a tab must retain all session-owned editor state");
     Assert(first.IsSpellCheckEnabledOverride == false,
-        "a spelling override must survive tab switching for the current process");
+        "a spelling override must survive transfer for the current process");
+
+    var rejectedBySource = false;
+    try
+    {
+        workspace.SelectTab(first);
+    }
+    catch (ArgumentException)
+    {
+        rejectedBySource = true;
+    }
+
+    Assert(rejectedBySource,
+        "a detached tab must no longer be selectable in its source workspace");
 }
 
 static void VerifyUntitledPreview()
