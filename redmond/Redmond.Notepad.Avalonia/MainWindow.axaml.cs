@@ -818,7 +818,6 @@ public partial class MainWindow : Window
         SettingsPage.SetWordWrap(_viewOptions.WordWrap);
         SettingsPage.SetFormattingEnabled(_viewOptions.FormattingEnabled);
         NewMarkdownTabMenuItem.IsVisible = _viewOptions.FormattingEnabled;
-        ClearFormattingMenuItem.IsVisible = _viewOptions.FormattingEnabled;
         MarkdownMenuItem.IsVisible = _viewOptions.FormattingEnabled;
         ZoomStatus.Text = $"{_viewOptions.ZoomPercent:0}%";
     }
