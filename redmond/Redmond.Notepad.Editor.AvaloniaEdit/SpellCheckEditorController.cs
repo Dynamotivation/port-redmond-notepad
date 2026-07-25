@@ -19,8 +19,6 @@ public sealed class SpellCheckEditorController : IDisposable
     private readonly TextEditor _editor;
     private readonly ISpellCheckService _service;
     private readonly SpellCheckBackgroundRenderer _renderer;
-    private readonly Dictionary<TextDocument, HashSet<string>> _ignoredWords =
-        new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<TextDocument, AutocorrectionChange> _autocorrections =
         new(ReferenceEqualityComparer.Instance);
     private CancellationTokenSource? _checkCancellation;
@@ -30,6 +28,8 @@ public sealed class SpellCheckEditorController : IDisposable
     private bool _enabled;
     private bool _isApplyingAutocorrect;
     private AutocorrectMode _autocorrectMode;
+    private ISet<string> _ignoredWords =
+        new HashSet<string>(StringComparer.CurrentCultureIgnoreCase);
     private int _generation;
 
     public SpellCheckEditorController(TextEditor editor, ISpellCheckService service)
@@ -72,6 +72,15 @@ public sealed class SpellCheckEditorController : IDisposable
 
     public void SetAutocorrectMode(AutocorrectMode mode) =>
         _autocorrectMode = _enabled ? mode : AutocorrectMode.Off;
+
+    public void SetIgnoredWords(ISet<string> ignoredWords)
+    {
+        _ignoredWords = ignoredWords ?? throw new ArgumentNullException(nameof(ignoredWords));
+        if (_enabled)
+        {
+            ScheduleVisibleCheck(immediate: true);
+        }
+    }
 
     public AutocorrectionChange? CurrentAutocorrection =>
         _document is not null && _autocorrections.TryGetValue(_document, out var correction)
@@ -152,13 +161,7 @@ public sealed class SpellCheckEditorController : IDisposable
             return;
         }
 
-        if (!_ignoredWords.TryGetValue(_document, out var words))
-        {
-            words = new HashSet<string>(StringComparer.CurrentCultureIgnoreCase);
-            _ignoredWords.Add(_document, words);
-        }
-
-        words.Add(_document.GetText(issue.Start, issue.Length));
+        _ignoredWords.Add(_document.GetText(issue.Start, issue.Length));
         ScheduleVisibleCheck(immediate: true);
     }
 
@@ -474,8 +477,7 @@ public sealed class SpellCheckEditorController : IDisposable
 
             var absoluteStart = regionStart + issue.Start;
             if (_document is not null
-                && _ignoredWords.TryGetValue(_document, out var ignored)
-                && ignored.Contains(_document.GetText(absoluteStart, issue.Length)))
+                && _ignoredWords.Contains(_document.GetText(absoluteStart, issue.Length)))
             {
                 continue;
             }

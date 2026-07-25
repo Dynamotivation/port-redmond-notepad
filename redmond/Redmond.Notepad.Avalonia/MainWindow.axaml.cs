@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using AvaloniaEdit;
 using AvaloniaEdit.Rendering;
 using System.Collections.ObjectModel;
@@ -29,8 +30,10 @@ public partial class MainWindow : Window
     private const double TabWidthReductionFactor = 0.75;
     private const double NewTabButtonSlotWidth = 37;
     private const double TabScrollStep = 8;
+    private const double TabDragThreshold = 6;
     private const double ZoomStep = 10;
     private static readonly double[] TabWidthSteps = CreateTabWidthSteps();
+    private static readonly List<MainWindow> OpenWindows = [];
 
     private readonly NotepadWorkspace _workspace;
     private readonly ObservableCollection<NotepadTabItem> _tabs = [];
@@ -69,6 +72,11 @@ public partial class MainWindow : Window
     private TaskCompletionSource<ExternalChangesDecision>? _externalChangesDecision;
     private CancellationTokenSource? _externalChangeCheckCancellation;
     private AutocorrectionChange? _visibleAutocorrection;
+    private NotepadTab? _loadedTab;
+    private NotepadTabItem? _tabDragCandidate;
+    private Point _tabDragStart;
+    private bool _isDraggingTab;
+    private bool _isCompletingTabDrag;
 
     public MainWindow() : this([], null)
     {
@@ -107,6 +115,9 @@ public partial class MainWindow : Window
         Resources["NewTabToolTip"] = FormatCommandToolTip("New tab", NotepadShortcutIds.NewTab);
         AddHandler(KeyDownEvent, OnNotepadKeyDown, RoutingStrategies.Tunnel);
         AddHandler(PointerMovedEvent, OnWindowPointerMoved, RoutingStrategies.Tunnel);
+        AddHandler(PointerReleasedEvent, OnTabsPointerReleased, RoutingStrategies.Tunnel);
+        TabsList.AddHandler(PointerPressedEvent, OnTabsPointerPressed, RoutingStrategies.Tunnel);
+        TabsList.AddHandler(PointerMovedEvent, OnTabsPointerMoved, RoutingStrategies.Tunnel);
         PointerExited += OnWindowPointerExited;
         _appearance = NotepadSettingsStore.LoadAppearance();
         _themePreference = NotepadSettingsStore.LoadThemePreference();
@@ -154,10 +165,13 @@ public partial class MainWindow : Window
         UpdateWindowPresentation();
         Editor.TextChanged += OnEditorTextChanged;
         Editor.TextArea.Caret.PositionChanged += OnCaretPositionChanged;
+        Editor.TextArea.TextView.ScrollOffsetChanged += OnEditorScrollOffsetChanged;
         Opened += OnOpened;
         Closing += OnWindowClosing;
         PropertyChanged += OnWindowPropertyChanged;
         Closed += OnWindowClosed;
+        Activated += OnWindowActivated;
+        OpenWindows.Add(this);
         LoadSelectedTab();
         RefreshDocumentStatus();
     }
@@ -1407,6 +1421,8 @@ public partial class MainWindow : Window
 
     private void OnWindowClosed(object? sender, EventArgs e)
     {
+        OpenWindows.Remove(this);
+        Activated -= OnWindowActivated;
         NotepadSettingsStore.FontOptionsChanged -= OnGlobalFontOptionsChanged;
         NotepadSettingsStore.OpeningOptionsChanged -= OnGlobalOpeningOptionsChanged;
         NotepadSettingsStore.NativeMacOSMenuBarChanged -= OnGlobalNativeMacOSMenuBarChanged;
@@ -1417,13 +1433,23 @@ public partial class MainWindow : Window
         _printService.Dispose();
         _spellCheckController.AutocorrectionChanged -= OnAutocorrectionChanged;
         _spellCheckController.Dispose();
+        Editor.TextArea.TextView.ScrollOffsetChanged -= OnEditorScrollOffsetChanged;
         RemoveHandler(KeyDownEvent, OnNotepadKeyDown);
         RemoveHandler(PointerMovedEvent, OnWindowPointerMoved);
+        RemoveHandler(PointerReleasedEvent, OnTabsPointerReleased);
+        TabsList.RemoveHandler(PointerPressedEvent, OnTabsPointerPressed);
+        TabsList.RemoveHandler(PointerMovedEvent, OnTabsPointerMoved);
         PointerExited -= OnWindowPointerExited;
         foreach (var registration in _shortcutRegistrations)
         {
             registration.Dispose();
         }
+    }
+
+    private void OnWindowActivated(object? sender, EventArgs e)
+    {
+        OpenWindows.Remove(this);
+        OpenWindows.Add(this);
     }
 
     private void CloseTab(NotepadTabItem item)
@@ -1583,6 +1609,315 @@ public partial class MainWindow : Window
         {
             _suppressExternalChangeCheck = false;
         }
+    }
+
+    private void OnTabsPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        var point = e.GetCurrentPoint(TabsList);
+        if (!point.Properties.IsLeftButtonPressed
+            || e.Source is not Visual source
+            || source is Button
+            || source.FindAncestorOfType<Button>() is not null)
+        {
+            ResetTabDrag();
+            return;
+        }
+
+        var container = source as ListBoxItem ?? source.FindAncestorOfType<ListBoxItem>();
+        _tabDragCandidate = container?.DataContext as NotepadTabItem
+            ?? container?.Content as NotepadTabItem;
+        if (_tabDragCandidate is null)
+        {
+            return;
+        }
+
+        _tabDragStart = e.GetPosition(this);
+    }
+
+    private void OnTabsPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_tabDragCandidate is null)
+        {
+            return;
+        }
+
+        var position = e.GetPosition(this);
+        if (!_isDraggingTab)
+        {
+            var delta = position - _tabDragStart;
+            if (Math.Abs(delta.X) < TabDragThreshold
+                && Math.Abs(delta.Y) < TabDragThreshold)
+            {
+                return;
+            }
+
+            _isDraggingTab = true;
+            _tabDragCandidate.IsDragging = true;
+        }
+
+        UpdateTabDragPosition(position);
+
+        e.Handled = true;
+    }
+
+    private void UpdateTabDragPosition(Point position)
+    {
+        var screenPoint = this.PointToScreen(position);
+        ClearTabDropIndicators();
+        if (TryFindTabDropTarget(screenPoint, out var target, out var insertionIndex, out var indicatorX))
+        {
+            target.ShowTabDropIndicator(insertionIndex, indicatorX);
+        }
+    }
+
+    private void OnTabsPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (!_isDraggingTab || _tabDragCandidate is null)
+        {
+            ResetTabDrag();
+            return;
+        }
+
+        _isCompletingTabDrag = true;
+        var item = _tabDragCandidate;
+        var screenPoint = this.PointToScreen(e.GetPosition(this));
+        try
+        {
+            ClearTabDropIndicators();
+            if (TryFindTabDropTarget(
+                    screenPoint,
+                    out var target,
+                    out var insertionIndex,
+                    out _))
+            {
+                if (ReferenceEquals(target, this))
+                {
+                    ReorderTab(item, insertionIndex);
+                }
+                else
+                {
+                    TransferTab(item, target, insertionIndex);
+                }
+            }
+            else
+            {
+                TearOutTab(item, screenPoint);
+            }
+        }
+        finally
+        {
+            item.IsDragging = false;
+            e.Pointer.Capture(null);
+            _isCompletingTabDrag = false;
+            ResetTabDrag();
+            e.Handled = true;
+        }
+    }
+
+    private void OnTabsPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+    {
+        if (!_isCompletingTabDrag
+            && _isDraggingTab
+            && e.Pointer.Captured is null)
+        {
+            ResetTabDrag();
+        }
+    }
+
+    private void ResetTabDrag()
+    {
+        if (_tabDragCandidate is not null)
+        {
+            _tabDragCandidate.IsDragging = false;
+        }
+
+        _tabDragCandidate = null;
+        _isDraggingTab = false;
+        ClearTabDropIndicators();
+    }
+
+    private static void ClearTabDropIndicators()
+    {
+        foreach (var window in OpenWindows)
+        {
+            window.TabDropIndicator.IsVisible = false;
+        }
+    }
+
+    private static bool TryFindTabDropTarget(
+        PixelPoint screenPoint,
+        out MainWindow target,
+        out int insertionIndex,
+        out double indicatorX)
+    {
+        foreach (var candidate in Enumerable.Reverse(OpenWindows))
+        {
+            if (candidate.TryGetTabDrop(screenPoint, out insertionIndex, out indicatorX))
+            {
+                target = candidate;
+                return true;
+            }
+        }
+
+        target = null!;
+        insertionIndex = 0;
+        indicatorX = 0;
+        return false;
+    }
+
+    private bool TryGetTabDrop(
+        PixelPoint screenPoint,
+        out int insertionIndex,
+        out double indicatorX)
+    {
+        insertionIndex = 0;
+        indicatorX = 0;
+        if (!IsVisible || !DocumentTitleBar.IsVisible || TabBarArea.Bounds.Width <= 0)
+        {
+            return false;
+        }
+
+        var areaPoint = TabBarArea.PointToClient(screenPoint);
+        if (areaPoint.X < 0
+            || areaPoint.X > TabBarArea.Bounds.Width
+            || areaPoint.Y < 0
+            || areaPoint.Y > TabBarArea.Bounds.Height)
+        {
+            return false;
+        }
+
+        var viewportPoint = TabScrollViewer.PointToClient(screenPoint);
+        const double edgeScrollDistance = 22;
+        if (TabScrollLeftButton.IsVisible
+            && viewportPoint.X < edgeScrollDistance)
+        {
+            ScrollTabsBy(-TabScrollStep);
+        }
+        else if (TabScrollRightButton.IsVisible
+                 && viewportPoint.X > TabScrollViewer.Viewport.Width - edgeScrollDistance)
+        {
+            ScrollTabsBy(TabScrollStep);
+        }
+
+        var tabPoint = TabsList.PointToClient(screenPoint);
+        insertionIndex = Math.Clamp(
+            (int)Math.Round(tabPoint.X / CurrentTabWidth, MidpointRounding.AwayFromZero),
+            0,
+            _tabs.Count);
+        var indicatorScreenPoint = TabsList.PointToScreen(
+            new Point(insertionIndex * CurrentTabWidth, 0));
+        indicatorX = TabBarArea.PointToClient(indicatorScreenPoint).X;
+        return true;
+    }
+
+    private void ShowTabDropIndicator(int insertionIndex, double indicatorX)
+    {
+        var maximumX = Math.Max(0, TabBarArea.Bounds.Width - TabDropIndicator.Width);
+        TabDropIndicator.Margin = new Thickness(Math.Clamp(indicatorX, 0, maximumX), 0, 0, 1);
+        TabDropIndicator.IsVisible = insertionIndex >= 0;
+    }
+
+    private void ReorderTab(NotepadTabItem item, int insertionIndex)
+    {
+        var sourceIndex = _tabs.IndexOf(item);
+        if (sourceIndex < 0)
+        {
+            return;
+        }
+
+        var destinationIndex = insertionIndex > sourceIndex
+            ? insertionIndex - 1
+            : insertionIndex;
+        destinationIndex = Math.Clamp(destinationIndex, 0, _tabs.Count - 1);
+        if (destinationIndex == sourceIndex)
+        {
+            return;
+        }
+
+        _workspace.MoveTab(item.Tab, destinationIndex);
+        _tabs.Move(sourceIndex, destinationIndex);
+        TabsList.SelectedItem = item;
+        RefreshTabSeparators();
+        ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
+    }
+
+    private void TransferTab(NotepadTabItem item, MainWindow target, int insertionIndex)
+    {
+        SaveLoadedTabEditorState();
+        DetachTabForTransfer(item);
+        target.AcceptTransferredTab(item, insertionIndex);
+        target.Activate();
+        CloseIfEmptyAfterTransfer();
+    }
+
+    private void TearOutTab(NotepadTabItem item, PixelPoint screenPoint)
+    {
+        SaveLoadedTabEditorState();
+        var target = new MainWindow();
+        target.RemoveInitialPlaceholderForTransfer();
+        DetachTabForTransfer(item);
+        target.AcceptTransferredTab(item, 0);
+        target.Position = new PixelPoint(
+            screenPoint.X - (int)Math.Round(Math.Min(item.LayoutWidth, 180)),
+            screenPoint.Y - 18);
+        target.Show();
+        target.Activate();
+        CloseIfEmptyAfterTransfer();
+    }
+
+    private void RemoveInitialPlaceholderForTransfer()
+    {
+        if (_tabs.Count != 1)
+        {
+            throw new InvalidOperationException("A transfer target must begin with one placeholder tab.");
+        }
+
+        var placeholder = _tabs[0];
+        _workspace.DetachTab(placeholder.Tab);
+        _tabs.Clear();
+        _loadedTab = null;
+    }
+
+    private void DetachTabForTransfer(NotepadTabItem item)
+    {
+        var replacement = _workspace.DetachTab(item.Tab);
+        _tabs.Remove(item);
+        if (replacement is not null)
+        {
+            var replacementItem = _tabs.Single(candidate => ReferenceEquals(candidate.Tab, replacement));
+            TabsList.SelectedItem = replacementItem;
+            LoadSelectedTab();
+        }
+
+        RefreshTabSeparators();
+        ScheduleTabWidthUpdate(allowGrowth: true);
+        ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
+    }
+
+    private void AcceptTransferredTab(NotepadTabItem item, int insertionIndex)
+    {
+        insertionIndex = Math.Clamp(insertionIndex, 0, _tabs.Count);
+        _workspace.AttachTab(item.Tab, insertionIndex);
+        item.LayoutWidth = CurrentTabWidth;
+        _tabs.Insert(insertionIndex, item);
+        TabsList.SelectedItem = item;
+        LoadSelectedTab();
+        RefreshTabSeparators();
+        ScheduleTabWidthUpdate(allowGrowth: false);
+        ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
+    }
+
+    private void CloseIfEmptyAfterTransfer()
+    {
+        if (_tabs.Count != 0)
+        {
+            return;
+        }
+
+        _discardSessionOnClose = true;
+        NotepadSettingsStore.RemoveSessionWindow(_sessionId);
+        _allowWindowClose = true;
+        Close();
     }
 
     private Task<UnsavedChangesDecision> AskToSaveChangesAsync(NotepadDocument document)
@@ -1761,6 +2096,11 @@ public partial class MainWindow : Window
 
     private void OnWindowPointerMoved(object? sender, PointerEventArgs e)
     {
+        if (_isDraggingTab)
+        {
+            UpdateTabDragPosition(e.GetPosition(this));
+        }
+
         var position = e.GetPosition(TabBarArea);
         var isPointerOverTabBar = DocumentTitleBar.IsVisible
             && position.X >= 0
@@ -1782,6 +2122,11 @@ public partial class MainWindow : Window
 
     private void OnWindowPointerExited(object? sender, PointerEventArgs e)
     {
+        if (_isDraggingTab)
+        {
+            e.Pointer.Capture(this);
+        }
+
         if (!_isPointerOverTabBar)
         {
             return;
@@ -1997,9 +2342,14 @@ public partial class MainWindow : Window
 
     private void LoadSelectedTab()
     {
+        SaveLoadedTabEditorState();
+        var tab = _workspace.SelectedTab;
+        var state = tab.EditorState;
+        var document = GetEditorBuffer(tab).Document;
         _isLoadingTab = true;
-        Editor.Document = GetEditorBuffer(_workspace.SelectedTab).Document;
-        Editor.CaretOffset = Editor.Document.TextLength;
+        Editor.Document = document;
+        RestoreEditorSelection(state, document);
+        _loadedTab = tab;
         _isLoadingTab = false;
         UpdateDocumentTitle();
         RefreshDocumentStatus();
@@ -2010,10 +2360,77 @@ public partial class MainWindow : Window
         }
         ApplySpellCheckPolicy();
         Editor.Focus();
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!ReferenceEquals(_loadedTab, tab)
+                || !ReferenceEquals(Editor.Document, document))
+            {
+                return;
+            }
+
+            _isLoadingTab = true;
+            RestoreEditorSelection(state, document);
+            if (GetEditorScrollViewer() is { } scrollViewer)
+            {
+                scrollViewer.Offset = new Vector(
+                    Math.Max(0, state.HorizontalOffset),
+                    Math.Max(0, state.VerticalOffset));
+            }
+            else
+            {
+                Editor.ScrollToHorizontalOffset(Math.Max(0, state.HorizontalOffset));
+                Editor.ScrollToVerticalOffset(Math.Max(0, state.VerticalOffset));
+            }
+            _isLoadingTab = false;
+            RefreshCursorStatus();
+        }, DispatcherPriority.Loaded);
     }
+
+    private void RestoreEditorSelection(NotepadTabEditorState state, AvaloniaEdit.Document.TextDocument document)
+    {
+        var selectionStart = Math.Clamp(state.SelectionStart, 0, document.TextLength);
+        var selectionLength = Math.Clamp(
+            state.SelectionLength,
+            0,
+            document.TextLength - selectionStart);
+        Editor.Select(selectionStart, selectionLength);
+        Editor.TextArea.Caret.Offset = Math.Clamp(state.CaretOffset, 0, document.TextLength);
+    }
+
+    private void SaveLoadedTabEditorState()
+    {
+        if (_loadedTab is null
+            || Editor.Document is null
+            || !ReferenceEquals(Editor.Document, GetEditorBuffer(_loadedTab).Document))
+        {
+            return;
+        }
+
+        var state = _loadedTab.EditorState;
+        state.CaretOffset = Editor.CaretOffset;
+        state.SelectionStart = Editor.SelectionStart;
+        state.SelectionLength = Editor.SelectionLength;
+        if (GetEditorScrollViewer() is { } scrollViewer)
+        {
+            state.HorizontalOffset = scrollViewer.Offset.X;
+            state.VerticalOffset = scrollViewer.Offset.Y;
+        }
+        else
+        {
+            state.HorizontalOffset = Editor.HorizontalOffset;
+            state.VerticalOffset = Editor.VerticalOffset;
+        }
+    }
+
+    private ScrollViewer? GetEditorScrollViewer() =>
+        Editor.GetVisualDescendants()
+            .OfType<ScrollViewer>()
+            .FirstOrDefault(candidate => candidate.Name == "PART_ScrollViewer");
 
     private void ApplySpellCheckPolicy()
     {
+        _spellCheckController.SetIgnoredWords(
+            _workspace.SelectedTab.EditorState.IgnoredSpellingWords);
         var enabled = IsSpellCheckEnabledForSelectedTab();
         _spellCheckController.SetEnabled(enabled);
         _spellCheckController.SetAutocorrectMode(
@@ -2079,7 +2496,32 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnCaretPositionChanged(object? sender, EventArgs e) => RefreshCursorStatus();
+    private void OnCaretPositionChanged(object? sender, EventArgs e)
+    {
+        if (!_isLoadingTab)
+        {
+            SaveLoadedTabEditorState();
+        }
+
+        RefreshCursorStatus();
+    }
+
+    private void OnEditorScrollOffsetChanged(object? sender, EventArgs e)
+    {
+        if (_isLoadingTab || _loadedTab is null)
+        {
+            return;
+        }
+
+        var tab = _loadedTab;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!_isLoadingTab && ReferenceEquals(_loadedTab, tab))
+            {
+                SaveLoadedTabEditorState();
+            }
+        }, DispatcherPriority.Background);
+    }
 
     private void RefreshDocumentStatus()
     {
@@ -2110,6 +2552,7 @@ public partial class MainWindow : Window
 
 internal sealed class NotepadTabItem(NotepadTab tab, double layoutWidth) : INotifyPropertyChanged
 {
+    private bool _isDragging;
     private bool _showLeadingSeparator;
     private bool _showTrailingSeparator;
     private double _layoutWidth = layoutWidth;
@@ -2121,6 +2564,24 @@ internal sealed class NotepadTabItem(NotepadTab tab, double layoutWidth) : INoti
     public bool ShowCloseGlyph => !Tab.Document.IsModified;
 
     public bool ShowModifiedGlyph => Tab.Document.IsModified;
+
+    public bool IsDragging
+    {
+        get => _isDragging;
+        set
+        {
+            if (_isDragging == value)
+            {
+                return;
+            }
+
+            _isDragging = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsDragging)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DragOpacity)));
+        }
+    }
+
+    public double DragOpacity => IsDragging ? 0.58 : 1;
 
     public double LayoutWidth
     {

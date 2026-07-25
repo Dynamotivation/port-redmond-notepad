@@ -296,7 +296,8 @@
                        Height="37"
                        HorizontalAlignment="Left"
                        SelectionMode="Single"
-                       SelectionChanged="OnTabSelectionChanged">
+                       SelectionChanged="OnTabSelectionChanged"
+                       PointerCaptureLost="OnTabsPointerCaptureLost">
                 <ListBox.ItemsPanel>
                   <ItemsPanelTemplate>
                     <StackPanel Orientation="Horizontal" />
@@ -304,7 +305,10 @@
                 </ListBox.ItemsPanel>
                 <ListBox.ItemTemplate>
                   <DataTemplate x:CompileBindings="False">
-                    <Grid Width="{Binding LayoutWidth}" Height="37" ColumnDefinitions="*,34">
+                    <Grid Width="{Binding LayoutWidth}"
+                          Height="37"
+                          Opacity="{Binding DragOpacity}"
+                          ColumnDefinitions="*,34">
                       <TextBlock Margin="12,0,4,0"
                                  VerticalAlignment="Center"
                                  TextTrimming="CharacterEllipsis"
@@ -399,6 +403,17 @@
             </Button>
           </Grid>
           </Grid>
+          <Border x:Name="TabDropIndicator"
+                  Width="2"
+                  Height="29"
+                  HorizontalAlignment="Left"
+                  VerticalAlignment="Bottom"
+                  Margin="0,0,0,1"
+                  Background="{DynamicResource SystemAccentColor}"
+                  CornerRadius="1"
+                  IsHitTestVisible="False"
+                  IsVisible="False"
+                  ZIndex="20" />
         </Grid>
       </Grid>
     </Grid>

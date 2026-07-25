@@ -15,7 +15,25 @@ public sealed class NotepadTab
     /// </summary>
     public bool? IsSpellCheckEnabledOverride { get; set; }
 
+    public NotepadTabEditorState EditorState { get; } = new();
+
     public string Title => Document.DisplayName;
+}
+
+public sealed class NotepadTabEditorState
+{
+    public int CaretOffset { get; set; }
+
+    public int SelectionStart { get; set; }
+
+    public int SelectionLength { get; set; }
+
+    public double HorizontalOffset { get; set; }
+
+    public double VerticalOffset { get; set; }
+
+    public ISet<string> IgnoredSpellingWords { get; } =
+        new HashSet<string>(StringComparer.CurrentCultureIgnoreCase);
 }
 
 public sealed class NotepadWorkspace
@@ -48,6 +66,59 @@ public sealed class NotepadWorkspace
             throw new ArgumentException("The tab does not belong to this workspace.", nameof(tab));
         }
 
+        SelectedTab = tab;
+    }
+
+    public void MoveTab(NotepadTab tab, int destinationIndex)
+    {
+        var sourceIndex = _tabs.IndexOf(tab);
+        if (sourceIndex < 0)
+        {
+            throw new ArgumentException("The tab does not belong to this workspace.", nameof(tab));
+        }
+
+        destinationIndex = Math.Clamp(destinationIndex, 0, _tabs.Count - 1);
+        if (sourceIndex == destinationIndex)
+        {
+            return;
+        }
+
+        _tabs.RemoveAt(sourceIndex);
+        _tabs.Insert(destinationIndex, tab);
+    }
+
+    public NotepadTab? DetachTab(NotepadTab tab)
+    {
+        var detachedIndex = _tabs.IndexOf(tab);
+        if (detachedIndex < 0)
+        {
+            throw new ArgumentException("The tab does not belong to this workspace.", nameof(tab));
+        }
+
+        _tabs.RemoveAt(detachedIndex);
+        if (_tabs.Count == 0)
+        {
+            return null;
+        }
+
+        if (ReferenceEquals(SelectedTab, tab))
+        {
+            SelectedTab = _tabs[Math.Min(detachedIndex, _tabs.Count - 1)];
+        }
+
+        return SelectedTab;
+    }
+
+    public void AttachTab(NotepadTab tab, int destinationIndex)
+    {
+        ArgumentNullException.ThrowIfNull(tab);
+        if (_tabs.Contains(tab))
+        {
+            throw new ArgumentException("The tab already belongs to this workspace.", nameof(tab));
+        }
+
+        destinationIndex = Math.Clamp(destinationIndex, 0, _tabs.Count);
+        _tabs.Insert(destinationIndex, tab);
         SelectedTab = tab;
     }
 
