@@ -12,6 +12,7 @@ public partial class SettingsPage : UserControl
     private readonly ObservableCollection<string> _fontFamilies = [];
     private bool _isUpdatingTheme;
     private bool _isUpdatingFont;
+    private bool _isUpdatingDocumentOptions;
 
     public SettingsPage()
     {
@@ -25,6 +26,7 @@ public partial class SettingsPage : UserControl
         }
 
         FontFamilyComboBox.ItemsSource = _fontFamilies;
+        NativeMacOSMenuBarCard.IsVisible = OperatingSystem.IsMacOS();
         WindowAppearancePanel.AppearanceChanged += OnAppearanceChanged;
         SizeChanged += (_, _) => UpdateResponsiveLayout(Bounds.Width);
         AttachedToVisualTree += (_, _) => UpdateResponsiveLayout(Bounds.Width);
@@ -37,6 +39,12 @@ public partial class SettingsPage : UserControl
     public event EventHandler<bool>? RecentFilesEnabledChanged;
 
     public event EventHandler<bool>? WordWrapChanged;
+
+    public event EventHandler<bool>? FormattingEnabledChanged;
+
+    public event EventHandler<bool>? NativeMacOSMenuBarChanged;
+
+    internal event EventHandler<NotepadOpeningOptions>? OpeningOptionsChanged;
 
     internal event EventHandler<NotepadFontOptions>? FontOptionsChanged;
 
@@ -55,6 +63,21 @@ public partial class SettingsPage : UserControl
     public void SetRecentFilesEnabled(bool enabled) => RecentFilesToggle.IsChecked = enabled;
 
     public void SetWordWrap(bool enabled) => WordWrapToggle.IsChecked = enabled;
+
+    public void SetFormattingEnabled(bool enabled) => FormattingToggle.IsChecked = enabled;
+
+    public void SetUseNativeMacOSMenuBar(bool enabled) =>
+        NativeMacOSMenuBarToggle.IsChecked = enabled;
+
+    internal void SetOpeningOptions(NotepadOpeningOptions options)
+    {
+        options = options.Normalized();
+        _isUpdatingDocumentOptions = true;
+        OpeningFilesComboBox.SelectedIndex = options.FileOpeningMode == NotepadFileOpeningMode.NewWindow ? 1 : 0;
+        NewWindowStartupButton.IsChecked = options.StartupMode == NotepadStartupMode.NewWindow;
+        ContinueSessionStartupButton.IsChecked = options.StartupMode == NotepadStartupMode.ContinuePreviousSession;
+        _isUpdatingDocumentOptions = false;
+    }
 
     internal void SetFontOptions(NotepadFontOptions options)
     {
@@ -104,6 +127,34 @@ public partial class SettingsPage : UserControl
 
     private void OnWordWrapToggleClick(object? sender, RoutedEventArgs e) =>
         WordWrapChanged?.Invoke(this, WordWrapToggle.IsChecked == true);
+
+    private void OnFormattingToggleClick(object? sender, RoutedEventArgs e) =>
+        FormattingEnabledChanged?.Invoke(this, FormattingToggle.IsChecked == true);
+
+    private void OnNativeMacOSMenuBarToggleClick(object? sender, RoutedEventArgs e) =>
+        NativeMacOSMenuBarChanged?.Invoke(this, NativeMacOSMenuBarToggle.IsChecked == true);
+
+    private void OnOpeningFilesSelectionChanged(object? sender, SelectionChangedEventArgs e) =>
+        RaiseOpeningOptionsChanged();
+
+    private void OnStartupModeChecked(object? sender, RoutedEventArgs e) =>
+        RaiseOpeningOptionsChanged();
+
+    private void RaiseOpeningOptionsChanged()
+    {
+        if (_isUpdatingDocumentOptions)
+        {
+            return;
+        }
+
+        OpeningOptionsChanged?.Invoke(this, new NotepadOpeningOptions(
+            OpeningFilesComboBox.SelectedIndex == 1
+                ? NotepadFileOpeningMode.NewWindow
+                : NotepadFileOpeningMode.NewTab,
+            ContinueSessionStartupButton.IsChecked == true
+                ? NotepadStartupMode.ContinuePreviousSession
+                : NotepadStartupMode.NewWindow));
+    }
 
     private void OnFontSelectionChanged(object? sender, SelectionChangedEventArgs e) =>
         RaiseFontOptionsChanged();

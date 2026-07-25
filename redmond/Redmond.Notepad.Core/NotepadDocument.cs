@@ -62,6 +62,28 @@ public sealed class NotepadDocument
         Buffer.MarkAsOriginal();
     }
 
+    public void RestoreSessionChanges(
+        DocumentFileReference? file,
+        string text,
+        Encoding encoding,
+        LineEnding lineEnding,
+        FileContentVersion? fileVersion)
+    {
+        File = file;
+        Encoding = encoding;
+        LineEnding = lineEnding;
+        FileVersion = fileVersion;
+        Buffer.Text = text;
+        if (Buffer.IsModified)
+        {
+            return;
+        }
+
+        // An empty restored edit still needs to retain its unsaved state.
+        Buffer.Replace(0, 0, " ");
+        Buffer.Replace(0, 1, string.Empty);
+    }
+
     public async Task LoadAsync(
         ITextFileStore store,
         DocumentFileReference file,
