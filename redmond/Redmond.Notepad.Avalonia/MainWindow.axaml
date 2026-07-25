@@ -427,9 +427,14 @@
 
     <Grid x:Name="DocumentPage"
           Grid.Row="1"
-          Grid.RowSpan="3"
-          RowDefinitions="38,*,Auto">
-    <Border Grid.Row="0"
+          Grid.RowSpan="3">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="38" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+    <Border x:Name="DocumentMenuBarHost"
+            Grid.Row="0"
             Classes="menuSurface">
     <Grid x:Name="DocumentMenuBar"
           ColumnDefinitions="*,Auto"
@@ -438,7 +443,7 @@
         <MenuItem Header="File" SubmenuOpened="OnFileMenuOpened">
               <MenuItem x:Name="NewTabMenuItem" Header="New tab" Click="OnNewTabClick" />
               <MenuItem x:Name="NewWindowMenuItem" Header="New window" Click="OnNewWindowClick" />
-              <MenuItem Header="New Markdown tab" IsEnabled="False" />
+              <MenuItem x:Name="NewMarkdownTabMenuItem" Header="New Markdown tab" IsEnabled="False" />
               <MenuItem x:Name="OpenMenuItem" Header="Open" Click="OnOpenFilesClick" />
               <MenuItem x:Name="RecentFilesMenuItem" Header="Recent" />
               <MenuItem x:Name="SaveMenuItem" Header="Save" Click="OnSaveClick" />
@@ -460,7 +465,7 @@
               <MenuItem x:Name="PasteMenuItem" Header="Paste" Click="OnPasteClick" />
               <MenuItem x:Name="DeleteMenuItem" Header="Delete" Click="OnDeleteClick" />
               <Separator Classes="menuDivider" />
-              <MenuItem Header="Clear formatting" IsEnabled="False" />
+              <MenuItem x:Name="ClearFormattingMenuItem" Header="Clear formatting" IsEnabled="False" />
               <Separator Classes="menuDivider" />
               <MenuItem x:Name="FindMenuItem" Header="Find" Click="OnFindClick" />
               <MenuItem x:Name="FindNextMenuItem" Header="Find next" Click="OnFindNextClick" />
@@ -489,7 +494,7 @@
                         Header="Word wrap"
                         ToggleType="CheckBox"
                         Click="OnWordWrapClick" />
-              <MenuItem Header="Markdown" IsEnabled="False">
+              <MenuItem x:Name="MarkdownMenuItem" Header="Markdown" IsEnabled="False">
                 <MenuItem Header="Markdown options unavailable" IsEnabled="False" />
               </MenuItem>
         </MenuItem>

@@ -33,6 +33,8 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<NotepadTabItem> _tabs = [];
     private readonly ITextFileStore _fileStore = new PhysicalTextFileStore();
     private readonly IReadOnlyList<DocumentFileReference> _initialFiles;
+    private readonly NotepadSessionWindowState? _initialSession;
+    private readonly Guid _sessionId;
     private readonly IShortcutService _shortcutService;
     private readonly IReadOnlyList<IDisposable> _shortcutRegistrations;
     private readonly WindowAppearanceController _appearanceController;
@@ -42,8 +44,10 @@ public partial class MainWindow : Window
     private NotepadPageSettings _pageSettings = new();
     private NotepadViewOptions _viewOptions;
     private NotepadFontOptions _fontOptions;
+    private NotepadOpeningOptions _openingOptions;
     private AppThemePreference _themePreference;
     private bool _recentFilesEnabled;
+    private bool _useNativeMacOSMenuBar;
     private bool _isLoadingTab;
     private bool _isUpdatingTabScrollButtons;
     private bool _isTabWidthUpdateScheduled;
@@ -53,21 +57,33 @@ public partial class MainWindow : Window
     private bool _allowWindowClose;
     private bool _isHandlingWindowClose;
     private bool _suppressExternalChangeCheck;
+    private bool _discardSessionOnClose;
+    private readonly HashSet<Guid> _discardedTabsOnClose = [];
     private INotepadFilePicker? _filePicker;
     private TaskCompletionSource<UnsavedChangesDecision>? _unsavedChangesDecision;
     private TaskCompletionSource<ExternalChangesDecision>? _externalChangesDecision;
     private CancellationTokenSource? _externalChangeCheckCancellation;
 
-    public MainWindow() : this([])
+    public MainWindow() : this([], null)
     {
     }
 
-    internal MainWindow(IEnumerable<string> initialPaths)
+    internal MainWindow(IEnumerable<string> initialPaths) : this(initialPaths, null)
+    {
+    }
+
+    internal MainWindow(NotepadSessionWindowState session) : this([], session)
+    {
+    }
+
+    private MainWindow(IEnumerable<string> initialPaths, NotepadSessionWindowState? session)
     {
         _initialFiles = initialPaths
             .Where(File.Exists)
             .Select(path => new DocumentFileReference(path))
             .ToArray();
+        _initialSession = session;
+        _sessionId = session?.Id ?? Guid.NewGuid();
         _workspace = new NotepadWorkspace(new AvaloniaEditTextBufferFactory());
         InitializeComponent();
         _shortcutService = ShortcutServices.CreateForCurrentPlatform();
@@ -85,6 +101,8 @@ public partial class MainWindow : Window
         _themePreference = NotepadSettingsStore.LoadThemePreference();
         _viewOptions = NotepadSettingsStore.LoadViewOptions();
         _fontOptions = NotepadSettingsStore.LoadFontOptions();
+        _openingOptions = NotepadSettingsStore.LoadOpeningOptions();
+        _useNativeMacOSMenuBar = NotepadSettingsStore.LoadUseNativeMacOSMenuBar();
         _recentFiles = NotepadSettingsStore.LoadRecentFiles();
         _recentFilesEnabled = NotepadSettingsStore.LoadRecentFilesEnabled();
         _appearanceController = WindowAppearanceController.Attach(this, WindowSurface, _appearance);
@@ -93,13 +111,21 @@ public partial class MainWindow : Window
         SettingsPage.SetThemePreference(_themePreference);
         SettingsPage.SetRecentFilesEnabled(_recentFilesEnabled);
         SettingsPage.SetWordWrap(_viewOptions.WordWrap);
+        SettingsPage.SetFormattingEnabled(_viewOptions.FormattingEnabled);
+        SettingsPage.SetUseNativeMacOSMenuBar(_useNativeMacOSMenuBar);
         SettingsPage.SetFontOptions(_fontOptions);
+        SettingsPage.SetOpeningOptions(_openingOptions);
         SettingsPage.AppearanceChanged += OnAppearanceChanged;
         SettingsPage.ThemeChanged += OnThemeChanged;
         SettingsPage.RecentFilesEnabledChanged += OnRecentFilesEnabledChanged;
         SettingsPage.WordWrapChanged += OnSettingsWordWrapChanged;
+        SettingsPage.FormattingEnabledChanged += OnFormattingEnabledChanged;
+        SettingsPage.NativeMacOSMenuBarChanged += OnNativeMacOSMenuBarChanged;
         SettingsPage.FontOptionsChanged += OnFontOptionsChanged;
+        SettingsPage.OpeningOptionsChanged += OnOpeningOptionsChanged;
         NotepadSettingsStore.FontOptionsChanged += OnGlobalFontOptionsChanged;
+        NotepadSettingsStore.OpeningOptionsChanged += OnGlobalOpeningOptionsChanged;
+        NotepadSettingsStore.NativeMacOSMenuBarChanged += OnGlobalNativeMacOSMenuBarChanged;
         foreach (var tab in _workspace.Tabs)
         {
             _tabs.Add(CreateTabItem(tab));
@@ -109,6 +135,7 @@ public partial class MainWindow : Window
         RefreshTabSeparators();
         RefreshRecentFilesMenu();
         ApplyViewOptions();
+        ApplyMacOSMenuPresentation();
         UpdateWindowPresentation();
         Editor.TextChanged += OnEditorTextChanged;
         Editor.TextArea.Caret.PositionChanged += OnCaretPositionChanged;
@@ -127,6 +154,10 @@ public partial class MainWindow : Window
         {
             await OpenFilesAsync(_initialFiles);
         }
+        else if (_initialSession is not null)
+        {
+            await RestoreSessionAsync(_initialSession);
+        }
 
         Editor.Focus();
         ScheduleTabWidthUpdate(allowGrowth: true);
@@ -136,10 +167,16 @@ public partial class MainWindow : Window
     private void OnSettingsClick(object? sender, RoutedEventArgs e)
         => ShowSettingsPage();
 
-    private void ShowSettingsPage()
+    internal void ShowSettingsPage()
     {
         SettingsPage.SetAppearance(_appearance);
         SettingsPage.SetThemePreference(_themePreference);
+        SettingsPage.SetRecentFilesEnabled(_recentFilesEnabled);
+        SettingsPage.SetWordWrap(_viewOptions.WordWrap);
+        SettingsPage.SetFormattingEnabled(_viewOptions.FormattingEnabled);
+        SettingsPage.SetUseNativeMacOSMenuBar(_useNativeMacOSMenuBar);
+        SettingsPage.SetFontOptions(_fontOptions);
+        SettingsPage.SetOpeningOptions(_openingOptions);
         DocumentTitleBar.IsVisible = false;
         DocumentPage.IsVisible = false;
         SettingsTitleBar.IsVisible = true;
@@ -193,6 +230,23 @@ public partial class MainWindow : Window
         Editor.Focus();
     }
 
+    private void OnFormattingEnabledChanged(object? sender, bool enabled)
+    {
+        _viewOptions = _viewOptions with { FormattingEnabled = enabled };
+        ApplyViewOptions();
+        NotepadSettingsStore.SaveViewOptions(_viewOptions);
+    }
+
+    private void OnNativeMacOSMenuBarChanged(object? sender, bool enabled) =>
+        NotepadSettingsStore.SaveUseNativeMacOSMenuBar(enabled);
+
+    private void OnGlobalNativeMacOSMenuBarChanged(object? sender, bool enabled)
+    {
+        _useNativeMacOSMenuBar = enabled;
+        SettingsPage.SetUseNativeMacOSMenuBar(enabled);
+        ApplyMacOSMenuPresentation();
+    }
+
     private void OnFontOptionsChanged(object? sender, NotepadFontOptions options) =>
         NotepadSettingsStore.SaveFontOptions(options);
 
@@ -201,6 +255,15 @@ public partial class MainWindow : Window
         _fontOptions = options;
         SettingsPage.SetFontOptions(options);
         ApplyViewOptions();
+    }
+
+    private void OnOpeningOptionsChanged(object? sender, NotepadOpeningOptions options) =>
+        NotepadSettingsStore.SaveOpeningOptions(options);
+
+    private void OnGlobalOpeningOptionsChanged(object? sender, NotepadOpeningOptions options)
+    {
+        _openingOptions = options;
+        SettingsPage.SetOpeningOptions(options);
     }
 
     private void OnWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
@@ -240,7 +303,26 @@ public partial class MainWindow : Window
         }
 
         var files = await _filePicker.PickOpenFilesAsync(allowMultiple: true);
-        await OpenFilesAsync(files);
+        await OpenFilesAccordingToPreferenceAsync(files);
+    }
+
+    private async Task OpenFilesAccordingToPreferenceAsync(IReadOnlyList<DocumentFileReference> files)
+    {
+        if (files.Count == 0)
+        {
+            return;
+        }
+
+        if (_openingOptions.FileOpeningMode == NotepadFileOpeningMode.NewTab)
+        {
+            await OpenFilesAsync(files);
+            return;
+        }
+
+        foreach (var file in files)
+        {
+            new MainWindow([file.Path]).Show();
+        }
     }
 
     private async Task OpenFilesAsync(IReadOnlyList<DocumentFileReference> files)
@@ -310,6 +392,113 @@ public partial class MainWindow : Window
 
         ScheduleTabWidthUpdate(allowGrowth: false);
         ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
+    }
+
+    private async Task RestoreSessionAsync(NotepadSessionWindowState session)
+    {
+        var savedDocuments = session.Documents ?? [];
+        if (savedDocuments.Length == 0)
+        {
+            return;
+        }
+
+        string? restorationMessage = null;
+        for (var index = 0; index < savedDocuments.Length; index++)
+        {
+            var savedDocument = savedDocuments[index];
+            var tab = index == 0 ? _workspace.SelectedTab : _workspace.CreateTab();
+            var item = index == 0
+                ? _tabs.Single(candidate => ReferenceEquals(candidate.Tab, tab))
+                : CreateTabItem(tab);
+            if (index > 0)
+            {
+                _tabs.Add(item);
+            }
+
+            DocumentFileReference? file = null;
+            if (!string.IsNullOrWhiteSpace(savedDocument.Path))
+            {
+                try
+                {
+                    file = new DocumentFileReference(savedDocument.Path);
+                }
+                catch (ArgumentException exception)
+                {
+                    restorationMessage = $"Could not restore a session path: {exception.Message}";
+                }
+            }
+
+            if (savedDocument.ModifiedText is not null)
+            {
+                Encoding encoding;
+                try
+                {
+                    encoding = string.IsNullOrWhiteSpace(savedDocument.EncodingName)
+                        ? TextFileMetadata.NewDocument.Encoding
+                        : RestoreSessionEncoding(
+                            savedDocument.EncodingName,
+                            savedDocument.HasByteOrderMark);
+                }
+                catch (ArgumentException)
+                {
+                    encoding = TextFileMetadata.NewDocument.Encoding;
+                }
+
+                tab.Document.RestoreSessionChanges(
+                    file,
+                    savedDocument.ModifiedText,
+                    encoding,
+                    savedDocument.LineEnding,
+                    savedDocument.BaseFileVersion);
+            }
+            else if (file is not null && File.Exists(file.Path))
+            {
+                try
+                {
+                    await tab.Document.LoadAsync(_fileStore, file);
+                    RememberRecentFile(file.Path);
+                }
+                catch (Exception exception) when (exception is IOException
+                    or UnauthorizedAccessException
+                    or DecoderFallbackException
+                    or ArgumentException)
+                {
+                    restorationMessage = $"Could not restore {Path.GetFileName(savedDocument.Path)}: {exception.Message}";
+                }
+            }
+            else if (file is not null)
+            {
+                restorationMessage = $"Could not restore {file.DisplayName} because it is no longer available.";
+            }
+
+            item.RefreshTitle();
+        }
+
+        var selectedIndex = Math.Clamp(session.SelectedIndex, 0, _tabs.Count - 1);
+        SelectTabWithoutExternalChangeCheck(_tabs[selectedIndex]);
+        RefreshTabSeparators();
+        LoadSelectedTab();
+        if (restorationMessage is not null)
+        {
+            DocumentSummary.Text = restorationMessage;
+        }
+
+        if (TabsList.SelectedItem is NotepadTabItem selectedItem)
+        {
+            await CheckSelectedDocumentForExternalChangesAsync(selectedItem);
+        }
+    }
+
+    private static Encoding RestoreSessionEncoding(string name, bool hasByteOrderMark)
+    {
+        var encoding = Encoding.GetEncoding(name);
+        return encoding.CodePage switch
+        {
+            65001 => new UTF8Encoding(hasByteOrderMark),
+            1200 => new UnicodeEncoding(bigEndian: false, byteOrderMark: hasByteOrderMark),
+            1201 => new UnicodeEncoding(bigEndian: true, byteOrderMark: hasByteOrderMark),
+            _ => encoding,
+        };
     }
 
     private bool RememberRecentFile(string path)
@@ -387,7 +576,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        await OpenFilesAsync([new DocumentFileReference(path)]);
+        await OpenFilesAccordingToPreferenceAsync([new DocumentFileReference(path)]);
     }
 
     private void OnClearRecentFilesClick(object? sender, RoutedEventArgs e)
@@ -627,6 +816,10 @@ public partial class MainWindow : Window
         StatusBarMenuItem.IsChecked = _viewOptions.ShowStatusBar;
         WordWrapMenuItem.IsChecked = _viewOptions.WordWrap;
         SettingsPage.SetWordWrap(_viewOptions.WordWrap);
+        SettingsPage.SetFormattingEnabled(_viewOptions.FormattingEnabled);
+        NewMarkdownTabMenuItem.IsVisible = _viewOptions.FormattingEnabled;
+        ClearFormattingMenuItem.IsVisible = _viewOptions.FormattingEnabled;
+        MarkdownMenuItem.IsVisible = _viewOptions.FormattingEnabled;
         ZoomStatus.Text = $"{_viewOptions.ZoomPercent:0}%";
     }
 
@@ -860,6 +1053,7 @@ public partial class MainWindow : Window
     {
         if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            App.RequestApplicationExit();
             foreach (var window in desktop.Windows.ToArray())
             {
                 window.Close();
@@ -1022,6 +1216,8 @@ public partial class MainWindow : Window
     private void OnWindowClosed(object? sender, EventArgs e)
     {
         NotepadSettingsStore.FontOptionsChanged -= OnGlobalFontOptionsChanged;
+        NotepadSettingsStore.OpeningOptionsChanged -= OnGlobalOpeningOptionsChanged;
+        NotepadSettingsStore.NativeMacOSMenuBarChanged -= OnGlobalNativeMacOSMenuBarChanged;
         _externalChangeCheckCancellation?.Cancel();
         _externalChangeCheckCancellation?.Dispose();
         _externalChangesDecision?.TrySetResult(ExternalChangesDecision.Cancel);
@@ -1037,6 +1233,15 @@ public partial class MainWindow : Window
 
     private void CloseTab(NotepadTabItem item)
     {
+        if (_tabs.Count == 1)
+        {
+            _discardSessionOnClose = true;
+            NotepadSettingsStore.RemoveSessionWindow(_sessionId);
+            _allowWindowClose = true;
+            Close();
+            return;
+        }
+
         _isPointerOverTabBar |= TabBarArea.IsPointerOver;
         var tab = item.Tab;
         var replacement = _workspace.CloseTab(tab);
@@ -1062,9 +1267,18 @@ public partial class MainWindow : Window
             return;
         }
 
+        var selectedBeforeClose = TabsList.SelectedItem as NotepadTabItem;
+        if (_openingOptions.StartupMode == NotepadStartupMode.ContinuePreviousSession
+            && ShouldPersistSessionForClose())
+        {
+            PersistSessionForClose(selectedBeforeClose);
+            return;
+        }
+
         var modifiedTabs = _tabs.Where(item => item.Tab.Document.IsModified).ToArray();
         if (modifiedTabs.Length == 0)
         {
+            PersistSessionForClose(selectedBeforeClose);
             return;
         }
 
@@ -1075,6 +1289,7 @@ public partial class MainWindow : Window
         }
 
         _isHandlingWindowClose = true;
+        _discardedTabsOnClose.Clear();
         foreach (var item in modifiedTabs)
         {
             SelectTabWithoutExternalChangeCheck(item);
@@ -1083,13 +1298,83 @@ public partial class MainWindow : Window
                 || decision == UnsavedChangesDecision.Save
                 && !await SaveSelectedDocumentAsync(forcePicker: false))
             {
+                _discardedTabsOnClose.Clear();
                 _isHandlingWindowClose = false;
                 return;
             }
+
+            if (decision == UnsavedChangesDecision.Discard)
+            {
+                _discardedTabsOnClose.Add(item.Tab.Id);
+            }
         }
 
+        PersistSessionForClose(selectedBeforeClose);
         _allowWindowClose = true;
         Close();
+    }
+
+    private void PersistSessionForClose(NotepadTabItem? selectedBeforeClose)
+    {
+        if (_discardSessionOnClose
+            || _openingOptions.StartupMode != NotepadStartupMode.ContinuePreviousSession)
+        {
+            NotepadSettingsStore.RemoveSessionWindow(_sessionId);
+            return;
+        }
+
+        if (!ShouldPersistSessionForClose())
+        {
+            NotepadSettingsStore.RemoveSessionWindow(_sessionId);
+            return;
+        }
+
+        var documents = new List<NotepadSessionDocumentState>();
+        var selectedIndex = 0;
+        foreach (var item in _tabs)
+        {
+            var state = CreateSessionDocumentState(item);
+            if (state is null)
+            {
+                continue;
+            }
+
+            if (ReferenceEquals(item, selectedBeforeClose))
+            {
+                selectedIndex = documents.Count;
+            }
+
+            documents.Add(state);
+        }
+
+        NotepadSettingsStore.SaveSessionWindow(new NotepadSessionWindowState(
+            _sessionId,
+            [.. documents],
+            selectedIndex));
+    }
+
+    private bool ShouldPersistSessionForClose() =>
+        App.IsApplicationExitRequested
+        || Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop
+        || desktop.Windows.Count <= 1;
+
+    private NotepadSessionDocumentState? CreateSessionDocumentState(NotepadTabItem item)
+    {
+        var document = item.Tab.Document;
+        if (_discardedTabsOnClose.Contains(item.Tab.Id))
+        {
+            return document.File is null
+                ? null
+                : new NotepadSessionDocumentState(document.File.Path, null);
+        }
+
+        return new NotepadSessionDocumentState(
+            document.File?.Path,
+            document.IsModified ? document.Text : null,
+            document.IsModified ? document.Encoding.WebName : null,
+            document.IsModified && document.Encoding.GetPreamble().Length > 0,
+            document.LineEnding,
+            document.IsModified ? document.FileVersion : null);
     }
 
     private void SelectTabWithoutExternalChangeCheck(NotepadTabItem item)

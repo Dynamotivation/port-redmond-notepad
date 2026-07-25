@@ -56,6 +56,21 @@
 
         <shared:WindowAppearanceSettingsPanel x:Name="WindowAppearancePanel" />
 
+        <shared:SettingsCard x:Name="NativeMacOSMenuBarCard"
+                             Header="macOS menu bar"
+                             Description="Move File, Edit, View, and Settings to the system menu bar"
+                             IsVisible="False">
+          <shared:SettingsCard.Icon>
+            <TextBlock HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       FontSize="17"
+                       Text="⌘" />
+          </shared:SettingsCard.Icon>
+          <ToggleSwitch x:Name="NativeMacOSMenuBarToggle"
+                        Classes="settingToggle"
+                        Click="OnNativeMacOSMenuBarToggleClick" />
+        </shared:SettingsCard>
+
         <TextBlock Classes="sectionHeading" Text="Text Formatting" />
         <shared:AnimatedSettingsExpander x:Name="FontSettingsExpander"
                                          Header="Font"
@@ -97,7 +112,9 @@
           <shared:SettingsCard.Icon>
             <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="18" Text="✂" />
           </shared:SettingsCard.Icon>
-          <ToggleSwitch Classes="settingToggle" />
+          <ToggleSwitch x:Name="FormattingToggle"
+                        Classes="settingToggle"
+                        Click="OnFormattingToggleClick" />
         </shared:SettingsCard>
 
         <TextBlock Classes="sectionHeading" Text="Opening Notepad" />
@@ -106,7 +123,9 @@
           <shared:SettingsCard.Icon>
             <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="17" Text="↗" />
           </shared:SettingsCard.Icon>
-          <ComboBox Width="164" SelectedIndex="0">
+          <ComboBox x:Name="OpeningFilesComboBox"
+                    Width="164"
+                    SelectionChanged="OnOpeningFilesSelectionChanged">
             <ComboBoxItem Content="Open in a new tab" />
             <ComboBoxItem Content="Open in a new window" />
           </ComboBox>
@@ -116,8 +135,14 @@
             <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="17" Text="□" />
           </shared:AnimatedSettingsExpander.Icon>
           <StackPanel Spacing="8">
-            <RadioButton GroupName="Startup" Content="Open a new window" IsChecked="True" />
-            <RadioButton GroupName="Startup" Content="Continue previous session" />
+            <RadioButton x:Name="NewWindowStartupButton"
+                         GroupName="Startup"
+                         Content="Open a new window"
+                         Click="OnStartupModeChecked" />
+            <RadioButton x:Name="ContinueSessionStartupButton"
+                         GroupName="Startup"
+                         Content="Continue previous session"
+                         Click="OnStartupModeChecked" />
           </StackPanel>
         </shared:AnimatedSettingsExpander>
         <shared:SettingsCard Header="Recent Files">

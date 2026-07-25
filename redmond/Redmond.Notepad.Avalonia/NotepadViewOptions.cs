@@ -3,7 +3,8 @@ namespace Redmond.Notepad.Avalonia;
 internal sealed record NotepadViewOptions(
     double ZoomPercent = 100,
     bool ShowStatusBar = true,
-    bool WordWrap = true)
+    bool WordWrap = true,
+    bool FormattingEnabled = true)
 {
     public NotepadViewOptions Normalized() => this with
     {

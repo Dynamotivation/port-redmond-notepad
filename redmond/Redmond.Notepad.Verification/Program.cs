@@ -42,6 +42,7 @@ try
     await VerifyExternalChangeProtectionAsync(store, verificationDirectory);
 
     VerifyUntitledPreview();
+    VerifySessionChangeRestoration();
     VerifyPortableEditLogic();
     VerifyPrintFieldFormatting();
     VerifyRecentFiles();
@@ -67,6 +68,26 @@ static void VerifyUntitledPreview()
         "empty documents must retain the Untitled title");
     Assert(document.SuggestedFileName == "Untitled.txt",
         "empty documents must retain the Untitled Save As suggestion");
+}
+
+static void VerifySessionChangeRestoration()
+{
+    var buffer = new StringTextBuffer();
+    var document = new NotepadDocument(buffer);
+    var version = new FileContentVersion(4, DateTimeOffset.UtcNow, "session-hash");
+    document.RestoreSessionChanges(
+        new DocumentFileReference(Path.Combine(Path.GetTempPath(), "session.txt")),
+        string.Empty,
+        new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+        LineEnding.Lf,
+        version);
+
+    Assert(document.IsModified,
+        "an empty restored edit must retain its unsaved state");
+    Assert(document.FileVersion == version,
+        "a restored edit must retain its base file hash for external-change protection");
+    Assert(document.LineEnding == LineEnding.Lf,
+        "a restored edit must retain its line-ending contract");
 }
 
 static void VerifyShortcutConventions()

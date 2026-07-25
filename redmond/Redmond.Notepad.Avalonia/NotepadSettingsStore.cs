@@ -6,17 +6,26 @@ namespace Redmond.Notepad.Avalonia;
 
 internal static class NotepadSettingsStore
 {
-    private static readonly string SettingsDirectory = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "RedmondNotepad");
+    private static readonly string SettingsDirectory =
+        Environment.GetEnvironmentVariable("REDMOND_NOTEPAD_SETTINGS_DIRECTORY")
+        ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "RedmondNotepad");
     private static readonly string SettingsPath = Path.Combine(SettingsDirectory, "settings.json");
     private static readonly string ThemePath = Path.Combine(SettingsDirectory, "theme.txt");
     private static readonly string RecentFilesPath = Path.Combine(SettingsDirectory, "recent-files.json");
     private static readonly string RecentFilesEnabledPath = Path.Combine(SettingsDirectory, "recent-files-enabled.txt");
     private static readonly string ViewPath = Path.Combine(SettingsDirectory, "view.json");
     private static readonly string FontPath = Path.Combine(SettingsDirectory, "editor-font.json");
+    private static readonly string OpeningPath = Path.Combine(SettingsDirectory, "opening.json");
+    private static readonly string SessionPath = Path.Combine(SettingsDirectory, "session.json");
+    private static readonly string NativeMacOSMenuBarPath = Path.Combine(SettingsDirectory, "native-macos-menu-bar.txt");
 
     public static event EventHandler<NotepadFontOptions>? FontOptionsChanged;
+
+    public static event EventHandler<NotepadOpeningOptions>? OpeningOptionsChanged;
+
+    public static event EventHandler<bool>? NativeMacOSMenuBarChanged;
 
     public static AppThemePreference LoadThemePreference()
     {
@@ -147,6 +156,43 @@ internal static class NotepadSettingsStore
         {
             // The setting remains live when persistence is unavailable.
         }
+    }
+
+    public static bool LoadUseNativeMacOSMenuBar()
+    {
+        try
+        {
+            return File.Exists(NativeMacOSMenuBarPath)
+                && bool.TryParse(File.ReadAllText(NativeMacOSMenuBarPath), out var enabled)
+                && enabled;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    public static void SaveUseNativeMacOSMenuBar(bool enabled)
+    {
+        try
+        {
+            Directory.CreateDirectory(SettingsDirectory);
+            File.WriteAllText(NativeMacOSMenuBarPath, enabled.ToString());
+        }
+        catch (IOException)
+        {
+            // The setting remains live when persistence is unavailable.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // The setting remains live when persistence is unavailable.
+        }
+
+        NativeMacOSMenuBarChanged?.Invoke(null, enabled);
     }
 
     public static RecentFileList LoadRecentFiles()
@@ -286,5 +332,110 @@ internal static class NotepadSettingsStore
         }
 
         FontOptionsChanged?.Invoke(null, options);
+    }
+
+    public static NotepadOpeningOptions LoadOpeningOptions()
+    {
+        try
+        {
+            return File.Exists(OpeningPath)
+                ? (JsonSerializer.Deserialize<NotepadOpeningOptions>(File.ReadAllText(OpeningPath))
+                    ?? new NotepadOpeningOptions()).Normalized()
+                : new NotepadOpeningOptions();
+        }
+        catch (Exception exception) when (exception is IOException
+            or UnauthorizedAccessException
+            or JsonException
+            or NotSupportedException)
+        {
+            return new NotepadOpeningOptions();
+        }
+    }
+
+    public static void SaveOpeningOptions(NotepadOpeningOptions options)
+    {
+        options = options.Normalized();
+        TrySaveJson(OpeningPath, options);
+        OpeningOptionsChanged?.Invoke(null, options);
+    }
+
+    public static NotepadSessionState LoadSession()
+    {
+        try
+        {
+            if (!File.Exists(SessionPath))
+            {
+                return NotepadSessionState.Empty;
+            }
+
+            var session = JsonSerializer.Deserialize<NotepadSessionState>(File.ReadAllText(SessionPath));
+            return session is null
+                ? NotepadSessionState.Empty
+                : new NotepadSessionState(session.Windows ?? []);
+        }
+        catch (Exception exception) when (exception is IOException
+            or UnauthorizedAccessException
+            or JsonException
+            or NotSupportedException)
+        {
+            return NotepadSessionState.Empty;
+        }
+    }
+
+    public static void SaveSessionWindow(NotepadSessionWindowState window)
+    {
+        var current = LoadSession();
+        var windows = current.Windows
+            .Where(candidate => candidate.Id != window.Id)
+            .Append(window)
+            .ToArray();
+        TrySaveJson(SessionPath, new NotepadSessionState(windows));
+    }
+
+    public static void RemoveSessionWindow(Guid windowId)
+    {
+        var current = LoadSession();
+        var windows = current.Windows.Where(window => window.Id != windowId).ToArray();
+        if (windows.Length == current.Windows.Length)
+        {
+            return;
+        }
+
+        TrySaveJson(SessionPath, new NotepadSessionState(windows));
+    }
+
+    public static void ClearSession()
+    {
+        try
+        {
+            File.Delete(SessionPath);
+        }
+        catch (IOException)
+        {
+            // A stale session is preferable to disrupting shutdown.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // A stale session is preferable to disrupting shutdown.
+        }
+    }
+
+    private static void TrySaveJson<T>(string path, T value)
+    {
+        try
+        {
+            Directory.CreateDirectory(SettingsDirectory);
+            var temporaryPath = path + ".tmp";
+            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(value));
+            File.Move(temporaryPath, path, overwrite: true);
+        }
+        catch (IOException)
+        {
+            // The setting remains live when persistence is unavailable.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // The setting remains live when persistence is unavailable.
+        }
     }
 }
