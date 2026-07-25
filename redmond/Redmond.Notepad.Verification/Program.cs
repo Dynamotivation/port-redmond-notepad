@@ -47,6 +47,7 @@ try
     VerifyPrintFieldFormatting();
     VerifyRecentFiles();
     VerifySpellCheckPrimitives();
+    VerifyTabScopedSpellCheckOverride();
     VerifyShortcutConventions();
 
     Console.WriteLine("Core file verification: passed");
@@ -54,6 +55,26 @@ try
 finally
 {
     Directory.Delete(verificationDirectory, recursive: true);
+}
+
+static void VerifyTabScopedSpellCheckOverride()
+{
+    var workspace = new NotepadWorkspace();
+    var first = workspace.SelectedTab;
+    var second = workspace.CreateTab();
+
+    Assert(first.IsSpellCheckEnabledOverride is null
+           && second.IsSpellCheckEnabledOverride is null,
+        "new tabs must inherit the global spelling policy");
+
+    first.IsSpellCheckEnabledOverride = false;
+    workspace.SelectTab(second);
+    Assert(second.IsSpellCheckEnabledOverride is null,
+        "a spelling override must remain owned by its tab");
+
+    workspace.SelectTab(first);
+    Assert(first.IsSpellCheckEnabledOverride == false,
+        "a spelling override must survive tab switching for the current process");
 }
 
 static void VerifyUntitledPreview()

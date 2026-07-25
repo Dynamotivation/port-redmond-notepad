@@ -8,6 +8,13 @@ public sealed class NotepadTab
 
     public NotepadDocument Document { get; }
 
+    /// <summary>
+    /// Overrides the global spelling policy for this tab until the process exits.
+    /// A null value inherits the current global and file-type settings.
+    /// This deliberately is not part of session persistence.
+    /// </summary>
+    public bool? IsSpellCheckEnabledOverride { get; set; }
+
     public string Title => Document.DisplayName;
 }
 

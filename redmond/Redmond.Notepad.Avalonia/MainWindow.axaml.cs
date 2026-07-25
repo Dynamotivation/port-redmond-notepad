@@ -7,6 +7,8 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using AvaloniaEdit;
+using AvaloniaEdit.Rendering;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Text;
@@ -66,6 +68,7 @@ public partial class MainWindow : Window
     private TaskCompletionSource<UnsavedChangesDecision>? _unsavedChangesDecision;
     private TaskCompletionSource<ExternalChangesDecision>? _externalChangesDecision;
     private CancellationTokenSource? _externalChangeCheckCancellation;
+    private AutocorrectionChange? _visibleAutocorrection;
 
     public MainWindow() : this([], null)
     {
@@ -97,6 +100,7 @@ public partial class MainWindow : Window
         _spellCheckController = new SpellCheckEditorController(
             Editor,
             PlatformSpellCheckServiceFactory.Create());
+        _spellCheckController.AutocorrectionChanged += OnAutocorrectionChanged;
         Editor.TextArea.RightClickMovesCaret = true;
         ConfigureFileMenuShortcuts();
         Resources["CloseTabToolTip"] = FormatCommandToolTip("Close tab", NotepadShortcutIds.CloseTab);
@@ -789,9 +793,25 @@ public partial class MainWindow : Window
 
     private void OnEditorContextMenuOpened(object? sender, RoutedEventArgs e)
     {
+        var correction = OperatingSystem.IsMacOS()
+            ? _spellCheckController.CurrentAutocorrection
+            : null;
         var issue = _spellCheckController.GetIssueAt(Editor.CaretOffset)
             ?? _spellCheckController.GetIssueAt(Math.Max(0, Editor.CaretOffset - 1));
         var items = new List<object>();
+        if (correction is not null
+            && Editor.CaretOffset >= correction.Start
+            && Editor.CaretOffset <= correction.Start + correction.Replacement.Length)
+        {
+            var changeBackItem = new MenuItem
+            {
+                Header = $"Change Back to “{correction.Original}”",
+            };
+            changeBackItem.Click += (_, _) => ChangeBack(correction);
+            items.Add(changeBackItem);
+            items.Add(new Separator());
+        }
+
         if (issue is not null)
         {
             var suggestions = _spellCheckController.Suggest(issue);
@@ -825,6 +845,21 @@ public partial class MainWindow : Window
         items.Add(CreateEditorContextCommand("Delete", Editor.SelectionLength > 0, DeleteEditor));
         items.Add(new Separator());
         items.Add(CreateEditorContextCommand("Select all", true, Editor.SelectAll));
+        items.Add(new Separator());
+        var effectiveSpellCheck = IsSpellCheckEnabledForSelectedTab();
+        var spellCheckItem = new MenuItem
+        {
+            Header = "Check spelling",
+            ToggleType = MenuItemToggleType.CheckBox,
+            IsChecked = effectiveSpellCheck,
+            IsEnabled = _spellCheckController.IsAvailable,
+        };
+        spellCheckItem.Click += (_, _) =>
+        {
+            _workspace.SelectedTab.IsSpellCheckEnabledOverride = !effectiveSpellCheck;
+            ApplySpellCheckPolicy();
+        };
+        items.Add(spellCheckItem);
         EditorContextMenu.Items.Clear();
         foreach (var item in items)
         {
@@ -855,6 +890,72 @@ public partial class MainWindow : Window
         Editor.SelectionLength = 0;
         RefreshAfterEditorCommand();
         _spellCheckController.Refresh();
+    }
+
+    private void OnAutocorrectionChanged(object? sender, AutocorrectionChangedEventArgs e)
+    {
+        _visibleAutocorrection = OperatingSystem.IsMacOS() ? e.Correction : null;
+        ChangeBackButton.IsVisible = false;
+        if (_visibleAutocorrection is null)
+        {
+            return;
+        }
+
+        ChangeBackButton.Content = $"Change Back to “{_visibleAutocorrection.Original}”";
+        Dispatcher.UIThread.Post(PositionChangeBackButton, DispatcherPriority.Render);
+    }
+
+    private void PositionChangeBackButton()
+    {
+        var correction = _visibleAutocorrection;
+        var document = Editor.Document;
+        if (correction is null
+            || document is null
+            || correction.Start + correction.Replacement.Length > document.TextLength
+            || !Editor.TextArea.TextView.VisualLinesValid)
+        {
+            ChangeBackButton.IsVisible = false;
+            return;
+        }
+
+        var location = document.GetLocation(correction.Start + correction.Replacement.Length);
+        var visualPosition = Editor.TextArea.TextView.GetVisualPosition(
+            new TextViewPosition(location.Line, location.Column),
+            VisualYPosition.LineBottom);
+        var translated = Editor.TextArea.TextView.TranslatePoint(visualPosition, EditorOverlay);
+        if (translated is null)
+        {
+            ChangeBackButton.IsVisible = false;
+            return;
+        }
+
+        ChangeBackButton.Measure(Size.Infinity);
+        var x = Math.Clamp(
+            translated.Value.X - ChangeBackButton.DesiredSize.Width,
+            0,
+            Math.Max(0, EditorOverlay.Bounds.Width - ChangeBackButton.DesiredSize.Width));
+        var y = Math.Clamp(
+            translated.Value.Y + 3,
+            0,
+            Math.Max(0, EditorOverlay.Bounds.Height - ChangeBackButton.DesiredSize.Height));
+        ChangeBackButton.Margin = new Thickness(x, y, 0, 0);
+        ChangeBackButton.IsVisible = true;
+    }
+
+    private void OnChangeBackClick(object? sender, RoutedEventArgs e)
+    {
+        if (_visibleAutocorrection is { } correction)
+        {
+            ChangeBack(correction);
+        }
+    }
+
+    private void ChangeBack(AutocorrectionChange correction)
+    {
+        if (_spellCheckController.ChangeBack(correction))
+        {
+            RefreshAfterEditorCommand();
+        }
     }
 
     private void OnZoomInClick(object? sender, RoutedEventArgs e) => ChangeZoom(ZoomStep);
@@ -1314,6 +1415,7 @@ public partial class MainWindow : Window
         _externalChangeCheckCancellation?.Dispose();
         _externalChangesDecision?.TrySetResult(ExternalChangesDecision.Cancel);
         _printService.Dispose();
+        _spellCheckController.AutocorrectionChanged -= OnAutocorrectionChanged;
         _spellCheckController.Dispose();
         RemoveHandler(KeyDownEvent, OnNotepadKeyDown);
         RemoveHandler(PointerMovedEvent, OnWindowPointerMoved);
@@ -1912,11 +2014,17 @@ public partial class MainWindow : Window
 
     private void ApplySpellCheckPolicy()
     {
-        var path = _workspace.SelectedTab.Document.File?.Path;
-        var enabled = _spellingOptions.IsEnabledForPath(path);
+        var enabled = IsSpellCheckEnabledForSelectedTab();
         _spellCheckController.SetEnabled(enabled);
         _spellCheckController.SetAutocorrectMode(
             enabled ? _spellingOptions.AutocorrectMode : AutocorrectMode.Off);
+    }
+
+    private bool IsSpellCheckEnabledForSelectedTab()
+    {
+        var tab = _workspace.SelectedTab;
+        return tab.IsSpellCheckEnabledOverride
+            ?? _spellingOptions.IsEnabledForPath(tab.Document.File?.Path);
     }
 
     private void UpdateWindowPresentation()
