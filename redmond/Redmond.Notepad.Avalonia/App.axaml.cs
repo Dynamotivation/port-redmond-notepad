@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
+using Redmond.Notepad.Core;
 
 namespace Redmond.Notepad.Avalonia;
 
