@@ -14,7 +14,7 @@ internal enum NotepadStartupMode
 
 internal sealed record NotepadOpeningOptions(
     NotepadFileOpeningMode FileOpeningMode = NotepadFileOpeningMode.NewTab,
-    NotepadStartupMode StartupMode = NotepadStartupMode.NewWindow)
+    NotepadStartupMode StartupMode = NotepadStartupMode.ContinuePreviousSession)
 {
     public NotepadOpeningOptions Normalized() => this with
     {

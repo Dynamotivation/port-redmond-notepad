@@ -18,9 +18,9 @@ internal static class NotepadSettingsStore
     private static readonly string ViewPath = Path.Combine(SettingsDirectory, "view.json");
     private static readonly string FontPath = Path.Combine(SettingsDirectory, "editor-font.json");
     private static readonly string OpeningPath = Path.Combine(SettingsDirectory, "opening.json");
-    private static readonly string SessionPath = Path.Combine(SettingsDirectory, "session.json");
     private static readonly string NativeMacOSMenuBarPath = Path.Combine(SettingsDirectory, "native-macos-menu-bar.txt");
     private static readonly string SpellingPath = Path.Combine(SettingsDirectory, "spelling.json");
+    private static readonly NotepadSessionRecoveryStore SessionStore = new(SettingsDirectory);
 
     public static event EventHandler<NotepadFontOptions>? FontOptionsChanged;
 
@@ -391,52 +391,55 @@ internal static class NotepadSettingsStore
     {
         try
         {
-            if (!File.Exists(SessionPath))
-            {
-                return NotepadSessionState.Empty;
-            }
-
-            var session = JsonSerializer.Deserialize<NotepadSessionState>(File.ReadAllText(SessionPath));
-            return session is null
-                ? NotepadSessionState.Empty
-                : new NotepadSessionState(session.Windows ?? []);
+            return SessionStore.Load();
         }
         catch (Exception exception) when (exception is IOException
             or UnauthorizedAccessException
             or JsonException
+            or ArgumentException
             or NotSupportedException)
         {
             return NotepadSessionState.Empty;
         }
     }
 
-    public static void SaveSessionWindow(NotepadSessionWindowState window)
+    public static void SaveSessionWindow(NotepadSessionWindowSnapshot snapshot)
     {
-        var current = LoadSession();
-        var windows = current.Windows
-            .Where(candidate => candidate.Id != window.Id)
-            .Append(window)
-            .ToArray();
-        TrySaveJson(SessionPath, new NotepadSessionState(windows));
+        try
+        {
+            SessionStore.SaveWindow(snapshot);
+        }
+        catch (Exception exception) when (exception is IOException
+            or UnauthorizedAccessException
+            or JsonException
+            or ArgumentException
+            or NotSupportedException)
+        {
+            // A later edit will retry the recovery snapshot.
+        }
     }
 
-    public static void RemoveSessionWindow(Guid windowId)
+    public static void RemoveSessionWindow(Guid windowId, long revision = long.MaxValue)
     {
-        var current = LoadSession();
-        var windows = current.Windows.Where(window => window.Id != windowId).ToArray();
-        if (windows.Length == current.Windows.Length)
+        try
         {
-            return;
+            SessionStore.RemoveWindow(windowId, revision);
         }
-
-        TrySaveJson(SessionPath, new NotepadSessionState(windows));
+        catch (Exception exception) when (exception is IOException
+            or UnauthorizedAccessException
+            or JsonException
+            or ArgumentException
+            or NotSupportedException)
+        {
+            // A stale session is preferable to disrupting shutdown.
+        }
     }
 
     public static void ClearSession()
     {
         try
         {
-            File.Delete(SessionPath);
+            SessionStore.Clear();
         }
         catch (IOException)
         {

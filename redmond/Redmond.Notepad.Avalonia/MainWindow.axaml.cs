@@ -32,6 +32,7 @@ public partial class MainWindow : Window
     private const double TabScrollStep = 8;
     private const double TabDragThreshold = 6;
     private const double ZoomStep = 10;
+    private static readonly TimeSpan RecoverySaveDelay = TimeSpan.FromMilliseconds(750);
     private static readonly double[] TabWidthSteps = CreateTabWidthSteps();
     private static readonly List<MainWindow> OpenWindows = [];
 
@@ -77,6 +78,8 @@ public partial class MainWindow : Window
     private Point _tabDragStart;
     private bool _isDraggingTab;
     private bool _isCompletingTabDrag;
+    private CancellationTokenSource? _recoverySaveDebounce;
+    private long _recoveryRevision;
 
     public MainWindow() : this([], null)
     {
@@ -98,6 +101,7 @@ public partial class MainWindow : Window
             .ToArray();
         _initialSession = session;
         _sessionId = session?.Id ?? Guid.NewGuid();
+        _recoveryRevision = session?.Revision ?? 0;
         _workspace = new NotepadWorkspace(new AvaloniaEditTextBufferFactory());
         InitializeComponent();
         _shortcutService = ShortcutServices.CreateForCurrentPlatform();
@@ -188,6 +192,7 @@ public partial class MainWindow : Window
             await RestoreSessionAsync(_initialSession);
         }
 
+        ScheduleRecoverySnapshot();
         Editor.Focus();
         ScheduleTabWidthUpdate(allowGrowth: true);
         ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
@@ -294,6 +299,15 @@ public partial class MainWindow : Window
     {
         _openingOptions = options;
         SettingsPage.SetOpeningOptions(options);
+        if (options.StartupMode == NotepadStartupMode.ContinuePreviousSession)
+        {
+            ScheduleRecoverySnapshot();
+        }
+        else
+        {
+            CancelPendingRecoverySnapshot();
+            NotepadSettingsStore.RemoveSessionWindow(_sessionId, ++_recoveryRevision);
+        }
     }
 
     private void OnSpellingOptionsChanged(object? sender, NotepadSpellingOptions options) =>
@@ -326,6 +340,7 @@ public partial class MainWindow : Window
         LoadSelectedTab();
         ScheduleTabWidthUpdate(allowGrowth: false);
         ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
+        ScheduleRecoverySnapshot();
     }
 
     private void OnNewWindowClick(object? sender, RoutedEventArgs e) => OpenNewWindow();
@@ -432,6 +447,7 @@ public partial class MainWindow : Window
 
         ScheduleTabWidthUpdate(allowGrowth: false);
         ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
+        ScheduleRecoverySnapshot();
     }
 
     private async Task RestoreSessionAsync(NotepadSessionWindowState session)
@@ -491,6 +507,27 @@ public partial class MainWindow : Window
                     savedDocument.LineEnding,
                     savedDocument.BaseFileVersion);
             }
+            else if (savedDocument.HasRecoveryContent)
+            {
+                restorationMessage =
+                    $"Could not restore the unsaved recovery content for "
+                    + $"{file?.DisplayName ?? NotepadDocument.UntitledName}.";
+                if (file is not null && File.Exists(file.Path))
+                {
+                    try
+                    {
+                        await tab.Document.LoadAsync(_fileStore, file);
+                    }
+                    catch (Exception exception) when (exception is IOException
+                        or UnauthorizedAccessException
+                        or DecoderFallbackException
+                        or ArgumentException)
+                    {
+                        restorationMessage =
+                            $"Could not restore {file.DisplayName}: {exception.Message}";
+                    }
+                }
+            }
             else if (file is not null && File.Exists(file.Path))
             {
                 try
@@ -512,6 +549,7 @@ public partial class MainWindow : Window
             }
 
             item.RefreshTitle();
+            RestoreSessionEditorState(tab, savedDocument.EditorState);
         }
 
         var selectedIndex = Math.Clamp(session.SelectedIndex, 0, _tabs.Count - 1);
@@ -539,6 +577,23 @@ public partial class MainWindow : Window
             1201 => new UnicodeEncoding(bigEndian: true, byteOrderMark: hasByteOrderMark),
             _ => encoding,
         };
+    }
+
+    private static void RestoreSessionEditorState(
+        NotepadTab tab,
+        NotepadTabEditorSessionState? savedState)
+    {
+        if (savedState is null)
+        {
+            return;
+        }
+
+        var state = tab.EditorState;
+        state.CaretOffset = savedState.CaretOffset;
+        state.SelectionStart = savedState.SelectionStart;
+        state.SelectionLength = savedState.SelectionLength;
+        state.HorizontalOffset = savedState.HorizontalOffset;
+        state.VerticalOffset = savedState.VerticalOffset;
     }
 
     private bool RememberRecentFile(string path)
@@ -723,6 +778,7 @@ public partial class MainWindow : Window
     private void RefreshSavedDocument(NotepadTabItem item)
     {
         item.RefreshTitle();
+        ScheduleRecoverySnapshot();
         if (!ReferenceEquals(item.Tab, _workspace.SelectedTab))
         {
             return;
@@ -1421,6 +1477,7 @@ public partial class MainWindow : Window
 
     private void OnWindowClosed(object? sender, EventArgs e)
     {
+        CancelPendingRecoverySnapshot();
         OpenWindows.Remove(this);
         Activated -= OnWindowActivated;
         NotepadSettingsStore.FontOptionsChanged -= OnGlobalFontOptionsChanged;
@@ -1457,7 +1514,8 @@ public partial class MainWindow : Window
         if (_tabs.Count == 1)
         {
             _discardSessionOnClose = true;
-            NotepadSettingsStore.RemoveSessionWindow(_sessionId);
+            CancelPendingRecoverySnapshot();
+            NotepadSettingsStore.RemoveSessionWindow(_sessionId, ++_recoveryRevision);
             _allowWindowClose = true;
             Close();
             return;
@@ -1479,6 +1537,7 @@ public partial class MainWindow : Window
         LoadSelectedTab();
         ScheduleTabWidthUpdate(allowGrowth: true);
         ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
+        ScheduleRecoverySnapshot();
     }
 
     private async void OnWindowClosing(object? sender, WindowClosingEventArgs e)
@@ -1537,41 +1596,22 @@ public partial class MainWindow : Window
 
     private void PersistSessionForClose(NotepadTabItem? selectedBeforeClose)
     {
+        CancelPendingRecoverySnapshot();
         if (_discardSessionOnClose
             || _openingOptions.StartupMode != NotepadStartupMode.ContinuePreviousSession)
         {
-            NotepadSettingsStore.RemoveSessionWindow(_sessionId);
+            NotepadSettingsStore.RemoveSessionWindow(_sessionId, ++_recoveryRevision);
             return;
         }
 
         if (!ShouldPersistSessionForClose())
         {
-            NotepadSettingsStore.RemoveSessionWindow(_sessionId);
+            NotepadSettingsStore.RemoveSessionWindow(_sessionId, ++_recoveryRevision);
             return;
         }
 
-        var documents = new List<NotepadSessionDocumentState>();
-        var selectedIndex = 0;
-        foreach (var item in _tabs)
-        {
-            var state = CreateSessionDocumentState(item);
-            if (state is null)
-            {
-                continue;
-            }
-
-            if (ReferenceEquals(item, selectedBeforeClose))
-            {
-                selectedIndex = documents.Count;
-            }
-
-            documents.Add(state);
-        }
-
-        NotepadSettingsStore.SaveSessionWindow(new NotepadSessionWindowState(
-            _sessionId,
-            [.. documents],
-            selectedIndex));
+        NotepadSettingsStore.SaveSessionWindow(
+            CreateSessionWindowSnapshot(selectedBeforeClose, ++_recoveryRevision));
     }
 
     private bool ShouldPersistSessionForClose() =>
@@ -1579,23 +1619,137 @@ public partial class MainWindow : Window
         || Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop
         || desktop.Windows.Count <= 1;
 
-    private NotepadSessionDocumentState? CreateSessionDocumentState(NotepadTabItem item)
+    private NotepadSessionWindowSnapshot CreateSessionWindowSnapshot(
+        NotepadTabItem? selectedItem,
+        long revision)
+    {
+        SaveLoadedTabEditorState();
+        var documents = new List<NotepadSessionDocumentSnapshot>();
+        var selectedIndex = 0;
+        foreach (var item in _tabs)
+        {
+            var snapshot = CreateSessionDocumentSnapshot(item);
+            if (snapshot is null)
+            {
+                continue;
+            }
+
+            if (ReferenceEquals(item, selectedItem))
+            {
+                selectedIndex = documents.Count;
+            }
+
+            documents.Add(snapshot);
+        }
+
+        return new NotepadSessionWindowSnapshot(
+            _sessionId,
+            [.. documents],
+            selectedIndex,
+            revision);
+    }
+
+    private void ScheduleRecoverySnapshot()
+    {
+        if (_openingOptions.StartupMode != NotepadStartupMode.ContinuePreviousSession
+            || _allowWindowClose
+            || _discardSessionOnClose
+            || _tabs.Count == 0)
+        {
+            return;
+        }
+
+        CancelPendingRecoverySnapshot();
+        var cancellation = new CancellationTokenSource();
+        _recoverySaveDebounce = cancellation;
+        var revision = ++_recoveryRevision;
+        _ = PersistRecoverySnapshotAfterDelayAsync(revision, cancellation);
+    }
+
+    private async Task PersistRecoverySnapshotAfterDelayAsync(
+        long revision,
+        CancellationTokenSource cancellation)
+    {
+        try
+        {
+            await Task.Delay(RecoverySaveDelay, cancellation.Token).ConfigureAwait(false);
+            var snapshot = await Dispatcher.UIThread.InvokeAsync(
+                () => CreateSessionWindowSnapshot(
+                    TabsList.SelectedItem as NotepadTabItem,
+                    revision),
+                DispatcherPriority.Background,
+                cancellation.Token);
+            await Task.Run(
+                () => NotepadSettingsStore.SaveSessionWindow(snapshot),
+                cancellation.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (ReferenceEquals(_recoverySaveDebounce, cancellation))
+                {
+                    _recoverySaveDebounce = null;
+                }
+
+                cancellation.Dispose();
+            });
+        }
+    }
+
+    private void CancelPendingRecoverySnapshot()
+    {
+        var cancellation = _recoverySaveDebounce;
+        _recoverySaveDebounce = null;
+        if (cancellation is null)
+        {
+            return;
+        }
+
+        cancellation.Cancel();
+    }
+
+    private NotepadSessionDocumentSnapshot? CreateSessionDocumentSnapshot(NotepadTabItem item)
     {
         var document = item.Tab.Document;
         if (_discardedTabsOnClose.Contains(item.Tab.Id))
         {
             return document.File is null
                 ? null
-                : new NotepadSessionDocumentState(document.File.Path, null);
+                : new NotepadSessionDocumentSnapshot(
+                    CreateSessionDocumentState(item, isModified: false),
+                    null);
         }
 
+        return new NotepadSessionDocumentSnapshot(
+            CreateSessionDocumentState(item, document.IsModified),
+            document.IsModified ? document.CreateSnapshot() : null);
+    }
+
+    private static NotepadSessionDocumentState CreateSessionDocumentState(
+        NotepadTabItem item,
+        bool isModified)
+    {
+        var tab = item.Tab;
+        var document = tab.Document;
+        var editorState = tab.EditorState;
         return new NotepadSessionDocumentState(
             document.File?.Path,
-            document.IsModified ? document.Text : null,
-            document.IsModified ? document.Encoding.WebName : null,
-            document.IsModified && document.Encoding.GetPreamble().Length > 0,
+            null,
+            isModified ? document.Encoding.WebName : null,
+            isModified && document.Encoding.GetPreamble().Length > 0,
             document.LineEnding,
-            document.IsModified ? document.FileVersion : null);
+            isModified ? document.FileVersion : null,
+            tab.Id,
+            EditorState: new NotepadTabEditorSessionState(
+                editorState.CaretOffset,
+                editorState.SelectionStart,
+                editorState.SelectionLength,
+                editorState.HorizontalOffset,
+                editorState.VerticalOffset));
     }
 
     private void SelectTabWithoutExternalChangeCheck(NotepadTabItem item)
@@ -1839,6 +1993,7 @@ public partial class MainWindow : Window
         TabsList.SelectedItem = item;
         RefreshTabSeparators();
         ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
+        ScheduleRecoverySnapshot();
     }
 
     private void TransferTab(NotepadTabItem item, MainWindow target, int insertionIndex)
@@ -1846,6 +2001,8 @@ public partial class MainWindow : Window
         SaveLoadedTabEditorState();
         DetachTabForTransfer(item);
         target.AcceptTransferredTab(item, insertionIndex);
+        ScheduleRecoverySnapshot();
+        target.ScheduleRecoverySnapshot();
         target.Activate();
         CloseIfEmptyAfterTransfer();
     }
@@ -1857,6 +2014,8 @@ public partial class MainWindow : Window
         target.RemoveInitialPlaceholderForTransfer();
         DetachTabForTransfer(item);
         target.AcceptTransferredTab(item, 0);
+        ScheduleRecoverySnapshot();
+        target.ScheduleRecoverySnapshot();
         target.Position = new PixelPoint(
             screenPoint.X - (int)Math.Round(Math.Min(item.LayoutWidth, 180)),
             screenPoint.Y - 18);
@@ -1905,6 +2064,7 @@ public partial class MainWindow : Window
         RefreshTabSeparators();
         ScheduleTabWidthUpdate(allowGrowth: false);
         ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
+        ScheduleRecoverySnapshot();
     }
 
     private void CloseIfEmptyAfterTransfer()
@@ -1915,7 +2075,8 @@ public partial class MainWindow : Window
         }
 
         _discardSessionOnClose = true;
-        NotepadSettingsStore.RemoveSessionWindow(_sessionId);
+        CancelPendingRecoverySnapshot();
+        NotepadSettingsStore.RemoveSessionWindow(_sessionId, ++_recoveryRevision);
         _allowWindowClose = true;
         Close();
     }
@@ -1963,6 +2124,7 @@ public partial class MainWindow : Window
         RefreshTabSeparators();
         LoadSelectedTab();
         ScheduleTabViewportUpdate(ensureSelectedTabIsVisible: true);
+        ScheduleRecoverySnapshot();
 
         if (!_suppressExternalChangeCheck
             && !_isHandlingWindowClose
@@ -2478,6 +2640,7 @@ public partial class MainWindow : Window
 
         _spellCheckController.Refresh();
         RefreshAfterEditorCommand(focusEditor: false);
+        ScheduleRecoverySnapshot();
     }
 
     private void RefreshAfterEditorCommand(bool focusEditor = true)

@@ -43,6 +43,7 @@ try
 
     VerifyUntitledPreview();
     VerifySessionChangeRestoration();
+    VerifyCrashRecoveryStore(verificationDirectory);
     VerifyPortableEditLogic();
     VerifyPrintFieldFormatting();
     VerifyRecentFiles();
@@ -151,6 +152,83 @@ static void VerifySessionChangeRestoration()
         "a restored edit must retain its base file hash for external-change protection");
     Assert(document.LineEnding == LineEnding.Lf,
         "a restored edit must retain its line-ending contract");
+}
+
+static void VerifyCrashRecoveryStore(string verificationDirectory)
+{
+    var recoveryDirectory = Path.Combine(verificationDirectory, "recovery");
+    var store = new NotepadSessionRecoveryStore(recoveryDirectory);
+    var firstWindowId = Guid.NewGuid();
+    var secondWindowId = Guid.NewGuid();
+    var documentId = Guid.NewGuid();
+    var version = new FileContentVersion(17, DateTimeOffset.UtcNow, "base-content-hash");
+    var editorState = new NotepadTabEditorSessionState(11, 4, 7, 12.5, 640);
+    var modifiedText = "unsaved text that must survive a forced process exit";
+    var modifiedBuffer = new StringTextBuffer(modifiedText);
+    var documentState = new NotepadSessionDocumentState(
+        Path.Combine(verificationDirectory, "original.txt"),
+        null,
+        Encoding.UTF8.WebName,
+        false,
+        LineEnding.Lf,
+        version,
+        documentId,
+        EditorState: editorState);
+
+    store.SaveWindow(new NotepadSessionWindowSnapshot(
+        firstWindowId,
+        [new NotepadSessionDocumentSnapshot(documentState, modifiedBuffer.CreateSnapshot())],
+        0,
+        1));
+    store.SaveWindow(new NotepadSessionWindowSnapshot(
+        secondWindowId,
+        [new NotepadSessionDocumentSnapshot(
+            new NotepadSessionDocumentState(null, null, Id: Guid.NewGuid()),
+            null)],
+        0,
+        1));
+
+    var manifest = File.ReadAllText(Path.Combine(recoveryDirectory, "session.json"));
+    Assert(!manifest.Contains(modifiedText, StringComparison.Ordinal),
+        "large unsaved buffers must be kept outside the recovery manifest");
+
+    var restored = store.Load();
+    Assert(restored.Windows.Length == 2,
+        "recovery must retain every open window");
+    var restoredDocument = restored.Windows
+        .Single(window => window.Id == firstWindowId)
+        .Documents
+        .Single();
+    Assert(restoredDocument.ModifiedText == modifiedText,
+        "recovery must restore the exact unsaved buffer");
+    Assert(restoredDocument.BaseFileVersion == version,
+        "recovery must retain the base file hash used for external-change detection");
+    Assert(restoredDocument.EditorState == editorState,
+        "recovery must retain the tab's caret, selection, and scroll position");
+
+    var staleBuffer = new StringTextBuffer("stale edit");
+    store.SaveWindow(new NotepadSessionWindowSnapshot(
+        firstWindowId,
+        [new NotepadSessionDocumentSnapshot(documentState, staleBuffer.CreateSnapshot())],
+        0,
+        0));
+    Assert(store.Load().Windows
+            .Single(window => window.Id == firstWindowId)
+            .Documents.Single().ModifiedText == modifiedText,
+        "an older asynchronous snapshot must not overwrite newer recovery data");
+
+    store.RemoveWindow(firstWindowId, 2);
+    restored = store.Load();
+    Assert(restored.Windows.Length == 1 && restored.Windows[0].Id == secondWindowId,
+        "dismissing a window must remove only that window from recovery");
+    Assert(!Directory.EnumerateFiles(
+            Path.Combine(recoveryDirectory, "session-documents"),
+            $"*-{documentId:N}-*.txt").Any(),
+        "recovery payloads must be deleted when their tabs are dismissed");
+
+    store.Clear();
+    Assert(store.Load().Windows.Length == 0,
+        "starting with a new session must clear the recovery store");
 }
 
 static void VerifyShortcutConventions()
