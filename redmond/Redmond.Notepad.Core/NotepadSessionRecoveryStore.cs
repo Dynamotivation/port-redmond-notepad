@@ -12,7 +12,8 @@ public sealed record NotepadSessionWindowState(
     Guid Id,
     NotepadSessionDocumentState[] Documents,
     int SelectedIndex,
-    long Revision = 0);
+    long Revision = 0,
+    DateTimeOffset UpdatedAtUtc = default);
 
 public sealed record NotepadSessionDocumentState(
     string? Path,
@@ -41,7 +42,8 @@ public sealed record NotepadSessionWindowSnapshot(
     Guid Id,
     NotepadSessionDocumentSnapshot[] Documents,
     int SelectedIndex,
-    long Revision);
+    long Revision,
+    DateTimeOffset UpdatedAtUtc = default);
 
 /// <summary>
 /// Crash-tolerant storage for the open window/tab set. The manifest is replaced
@@ -56,6 +58,7 @@ public sealed class NotepadSessionRecoveryStore
     private readonly string _directory;
     private readonly string _manifestPath;
     private readonly string _documentsDirectory;
+    private readonly string _lockPath;
     private readonly Dictionary<Guid, long> _latestRevisions = [];
 
     public NotepadSessionRecoveryStore(string directory)
@@ -64,12 +67,14 @@ public sealed class NotepadSessionRecoveryStore
         _directory = Path.GetFullPath(directory);
         _manifestPath = Path.Combine(_directory, ManifestFileName);
         _documentsDirectory = Path.Combine(_directory, DocumentsDirectoryName);
+        _lockPath = Path.Combine(_directory, "session.lock");
     }
 
     public NotepadSessionState Load()
     {
         lock (_sync)
         {
+            using var fileLock = AcquireFileLock();
             var persisted = LoadManifest();
             var windows = persisted.Windows
                 .Select(window => window with
@@ -83,11 +88,44 @@ public sealed class NotepadSessionRecoveryStore
         }
     }
 
+    public NotepadSessionWindowState? LoadMostRecentWindow()
+    {
+        lock (_sync)
+        {
+            using var fileLock = AcquireFileLock();
+            var current = LoadManifest();
+            var latest = current.Windows
+                .Select((window, index) => new { Window = window, Index = index })
+                .OrderBy(candidate => candidate.Window.UpdatedAtUtc)
+                .ThenBy(candidate => candidate.Index)
+                .LastOrDefault()
+                ?.Window;
+            if (latest is null)
+            {
+                return null;
+            }
+
+            if (current.Windows.Length != 1 || current.Windows[0].Id != latest.Id)
+            {
+                SaveManifest(new NotepadSessionState([latest]));
+                DeleteUnreferencedPayloads([latest]);
+            }
+
+            return latest with
+            {
+                Documents = (latest.Documents ?? [])
+                    .Select(HydrateDocument)
+                    .ToArray(),
+            };
+        }
+    }
+
     public void SaveWindow(NotepadSessionWindowSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         lock (_sync)
         {
+            using var fileLock = AcquireFileLock();
             if (IsStale(snapshot.Id, snapshot.Revision))
             {
                 return;
@@ -104,7 +142,8 @@ public sealed class NotepadSessionRecoveryStore
                 snapshot.Id,
                 documents,
                 Math.Clamp(snapshot.SelectedIndex, 0, Math.Max(0, documents.Length - 1)),
-                snapshot.Revision);
+                snapshot.Revision,
+                snapshot.UpdatedAtUtc);
             var current = LoadManifest();
             var windows = current.Windows
                 .Where(candidate => candidate.Id != window.Id)
@@ -120,6 +159,7 @@ public sealed class NotepadSessionRecoveryStore
     {
         lock (_sync)
         {
+            using var fileLock = AcquireFileLock();
             if (IsStale(windowId, revision))
             {
                 return;
@@ -143,6 +183,7 @@ public sealed class NotepadSessionRecoveryStore
     {
         lock (_sync)
         {
+            using var fileLock = AcquireFileLock();
             if (Directory.Exists(_documentsDirectory))
             {
                 Directory.Delete(_documentsDirectory, recursive: true);
@@ -323,6 +364,30 @@ public sealed class NotepadSessionRecoveryStore
         var persisted = LoadManifest().Windows
             .FirstOrDefault(window => window.Id == windowId);
         return persisted is not null && revision < persisted.Revision;
+    }
+
+    private FileStream AcquireFileLock()
+    {
+        Directory.CreateDirectory(_directory);
+        IOException? lastException = null;
+        for (var attempt = 0; attempt < 200; attempt++)
+        {
+            try
+            {
+                return new FileStream(
+                    _lockPath,
+                    FileMode.OpenOrCreate,
+                    FileAccess.ReadWrite,
+                    FileShare.None);
+            }
+            catch (IOException exception)
+            {
+                lastException = exception;
+                Thread.Sleep(25);
+            }
+        }
+
+        throw new IOException("Timed out waiting for the Notepad recovery-store lock.", lastException);
     }
 
 }

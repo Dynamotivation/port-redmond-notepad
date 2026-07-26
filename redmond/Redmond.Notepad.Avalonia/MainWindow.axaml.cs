@@ -80,6 +80,7 @@ public partial class MainWindow : Window
     private bool _isCompletingTabDrag;
     private CancellationTokenSource? _recoverySaveDebounce;
     private long _recoveryRevision;
+    private DateTimeOffset _recoveryUpdatedAtUtc;
 
     public MainWindow() : this([], null)
     {
@@ -102,6 +103,7 @@ public partial class MainWindow : Window
         _initialSession = session;
         _sessionId = session?.Id ?? Guid.NewGuid();
         _recoveryRevision = session?.Revision ?? 0;
+        _recoveryUpdatedAtUtc = session?.UpdatedAtUtc ?? default;
         _workspace = new NotepadWorkspace(new AvaloniaEditTextBufferFactory());
         InitializeComponent();
         _shortcutService = ShortcutServices.CreateForCurrentPlatform();
@@ -306,7 +308,7 @@ public partial class MainWindow : Window
         else
         {
             CancelPendingRecoverySnapshot();
-            NotepadSettingsStore.RemoveSessionWindow(_sessionId, ++_recoveryRevision);
+            NotepadSettingsStore.ClearSession();
         }
     }
 
@@ -345,7 +347,13 @@ public partial class MainWindow : Window
 
     private void OnNewWindowClick(object? sender, RoutedEventArgs e) => OpenNewWindow();
 
-    private static void OpenNewWindow() => new MainWindow().Show();
+    private void OpenNewWindow()
+    {
+        if (!ProcessLaunchService.TryStartNewWindow([], out var error))
+        {
+            DocumentSummary.Text = $"Could not open a new window: {error}";
+        }
+    }
 
     private async void OnOpenFilesClick(object? sender, RoutedEventArgs e)
         => await PickAndOpenFilesAsync();
@@ -376,7 +384,11 @@ public partial class MainWindow : Window
 
         foreach (var file in files)
         {
-            new MainWindow([file.Path]).Show();
+            if (!ProcessLaunchService.TryStartNewWindow([file.Path], out var error))
+            {
+                DocumentSummary.Text = $"Could not open {file.DisplayName} in a new window: {error}";
+                break;
+            }
         }
     }
 
@@ -1316,7 +1328,13 @@ public partial class MainWindow : Window
         if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             App.RequestApplicationExit();
-            foreach (var window in desktop.Windows.ToArray())
+            var orderedWindows = OpenWindows
+                .Cast<Window>()
+                .Concat(desktop.Windows.Where(window =>
+                    window is not MainWindow mainWindow
+                    || !OpenWindows.Contains(mainWindow)))
+                .ToArray();
+            foreach (var window in orderedWindows)
             {
                 window.Close();
             }
@@ -1515,7 +1533,21 @@ public partial class MainWindow : Window
         {
             _discardSessionOnClose = true;
             CancelPendingRecoverySnapshot();
-            NotepadSettingsStore.RemoveSessionWindow(_sessionId, ++_recoveryRevision);
+            if (_openingOptions.StartupMode == NotepadStartupMode.ContinuePreviousSession)
+            {
+                NotepadSettingsStore.SaveSessionWindow(
+                    new NotepadSessionWindowSnapshot(
+                        _sessionId,
+                        [],
+                        0,
+                        ++_recoveryRevision,
+                        DateTimeOffset.UtcNow));
+            }
+            else
+            {
+                NotepadSettingsStore.RemoveSessionWindow(_sessionId, ++_recoveryRevision);
+            }
+
             _allowWindowClose = true;
             Close();
             return;
@@ -1548,8 +1580,7 @@ public partial class MainWindow : Window
         }
 
         var selectedBeforeClose = TabsList.SelectedItem as NotepadTabItem;
-        if (_openingOptions.StartupMode == NotepadStartupMode.ContinuePreviousSession
-            && ShouldPersistSessionForClose())
+        if (_openingOptions.StartupMode == NotepadStartupMode.ContinuePreviousSession)
         {
             PersistSessionForClose(selectedBeforeClose);
             return;
@@ -1604,24 +1635,17 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!ShouldPersistSessionForClose())
-        {
-            NotepadSettingsStore.RemoveSessionWindow(_sessionId, ++_recoveryRevision);
-            return;
-        }
-
         NotepadSettingsStore.SaveSessionWindow(
-            CreateSessionWindowSnapshot(selectedBeforeClose, ++_recoveryRevision));
+            CreateSessionWindowSnapshot(
+                selectedBeforeClose,
+                ++_recoveryRevision,
+                DateTimeOffset.UtcNow));
     }
-
-    private bool ShouldPersistSessionForClose() =>
-        App.IsApplicationExitRequested
-        || Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop
-        || desktop.Windows.Count <= 1;
 
     private NotepadSessionWindowSnapshot CreateSessionWindowSnapshot(
         NotepadTabItem? selectedItem,
-        long revision)
+        long revision,
+        DateTimeOffset? updatedAtUtc = null)
     {
         SaveLoadedTabEditorState();
         var documents = new List<NotepadSessionDocumentSnapshot>();
@@ -1646,10 +1670,11 @@ public partial class MainWindow : Window
             _sessionId,
             [.. documents],
             selectedIndex,
-            revision);
+            revision,
+            updatedAtUtc ?? _recoveryUpdatedAtUtc);
     }
 
-    private void ScheduleRecoverySnapshot()
+    private void ScheduleRecoverySnapshot(bool markAsEdited = false)
     {
         if (_openingOptions.StartupMode != NotepadStartupMode.ContinuePreviousSession
             || _allowWindowClose
@@ -1657,6 +1682,11 @@ public partial class MainWindow : Window
             || _tabs.Count == 0)
         {
             return;
+        }
+
+        if (markAsEdited)
+        {
+            _recoveryUpdatedAtUtc = DateTimeOffset.UtcNow;
         }
 
         CancelPendingRecoverySnapshot();
@@ -1711,6 +1741,9 @@ public partial class MainWindow : Window
 
         cancellation.Cancel();
     }
+
+    private static DateTimeOffset Max(DateTimeOffset first, DateTimeOffset second) =>
+        first >= second ? first : second;
 
     private NotepadSessionDocumentSnapshot? CreateSessionDocumentSnapshot(NotepadTabItem item)
     {
@@ -2001,6 +2034,9 @@ public partial class MainWindow : Window
         SaveLoadedTabEditorState();
         DetachTabForTransfer(item);
         target.AcceptTransferredTab(item, insertionIndex);
+        target._recoveryUpdatedAtUtc = Max(
+            target._recoveryUpdatedAtUtc,
+            _recoveryUpdatedAtUtc);
         ScheduleRecoverySnapshot();
         target.ScheduleRecoverySnapshot();
         target.Activate();
@@ -2014,6 +2050,9 @@ public partial class MainWindow : Window
         target.RemoveInitialPlaceholderForTransfer();
         DetachTabForTransfer(item);
         target.AcceptTransferredTab(item, 0);
+        target._recoveryUpdatedAtUtc = Max(
+            target._recoveryUpdatedAtUtc,
+            _recoveryUpdatedAtUtc);
         ScheduleRecoverySnapshot();
         target.ScheduleRecoverySnapshot();
         target.Position = new PixelPoint(
@@ -2640,7 +2679,7 @@ public partial class MainWindow : Window
 
         _spellCheckController.Refresh();
         RefreshAfterEditorCommand(focusEditor: false);
-        ScheduleRecoverySnapshot();
+        ScheduleRecoverySnapshot(markAsEdited: true);
     }
 
     private void RefreshAfterEditorCommand(bool focusEditor = true)
