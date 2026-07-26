@@ -12,6 +12,7 @@ public partial class App : Application
 {
     private static NativeMenu? s_nativeMacOSApplicationMenu;
     private static NativeMenuItem? s_nativeMacOSSettingsItem;
+    private static NotepadProcessRegistration? s_processRegistration;
 
     internal static bool IsApplicationExitRequested { get; private set; }
 
@@ -32,8 +33,23 @@ public partial class App : Application
         {
             IsApplicationExitRequested = false;
             desktop.ShutdownRequested += (_, _) => IsApplicationExitRequested = true;
+            s_processRegistration = NotepadSettingsStore.RegisterProcess();
+            desktop.Exit += (_, _) =>
+            {
+                s_processRegistration?.Dispose();
+                s_processRegistration = null;
+            };
             ApplyThemePreference(NotepadSettingsStore.LoadThemePreference());
-            var arguments = desktop.Args ?? [];
+            var rawArguments = desktop.Args ?? [];
+            var forceNewWindow = rawArguments.Contains(
+                ProcessLaunchService.NewWindowArgument,
+                StringComparer.Ordinal);
+            var arguments = rawArguments
+                .Where(argument => !string.Equals(
+                    argument,
+                    ProcessLaunchService.NewWindowArgument,
+                    StringComparison.Ordinal))
+                .ToArray();
             var openingOptions = NotepadSettingsStore.LoadOpeningOptions();
             if (arguments.Length > 0)
             {
@@ -42,7 +58,7 @@ public partial class App : Application
                     desktop.MainWindow = new MainWindow([arguments[0]]);
                     foreach (var path in arguments.Skip(1))
                     {
-                        new MainWindow([path]).Show();
+                        ProcessLaunchService.TryStartNewWindow([path], out _);
                     }
                 }
                 else
@@ -50,25 +66,28 @@ public partial class App : Application
                     desktop.MainWindow = new MainWindow(arguments);
                 }
             }
-            else if (openingOptions.StartupMode == NotepadStartupMode.ContinuePreviousSession)
+            else if (!forceNewWindow
+                && !s_processRegistration.HasOtherActiveProcesses
+                && openingOptions.StartupMode == NotepadStartupMode.ContinuePreviousSession)
             {
-                var sessionWindows = NotepadSettingsStore.LoadSession().Windows;
-                if (sessionWindows.Length == 0)
+                var sessionWindow = NotepadSettingsStore.LoadMostRecentSessionWindow();
+                if (sessionWindow is null)
                 {
                     desktop.MainWindow = new MainWindow();
                 }
                 else
                 {
-                    desktop.MainWindow = new MainWindow(sessionWindows[0]);
-                    foreach (var sessionWindow in sessionWindows.Skip(1))
-                    {
-                        new MainWindow(sessionWindow).Show();
-                    }
+                    desktop.MainWindow = new MainWindow(sessionWindow);
                 }
             }
             else
             {
-                NotepadSettingsStore.ClearSession();
+                if (!s_processRegistration.HasOtherActiveProcesses
+                    && openingOptions.StartupMode == NotepadStartupMode.NewWindow)
+                {
+                    NotepadSettingsStore.ClearSession();
+                }
+
                 desktop.MainWindow = new MainWindow();
             }
         }

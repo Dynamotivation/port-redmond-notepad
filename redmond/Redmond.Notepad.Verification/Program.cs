@@ -44,6 +44,7 @@ try
     VerifyUntitledPreview();
     VerifySessionChangeRestoration();
     VerifyCrashRecoveryStore(verificationDirectory);
+    VerifyProcessRegistration(verificationDirectory);
     VerifyPortableEditLogic();
     VerifyPrintFieldFormatting();
     VerifyRecentFiles();
@@ -226,9 +227,66 @@ static void VerifyCrashRecoveryStore(string verificationDirectory)
             $"*-{documentId:N}-*.txt").Any(),
         "recovery payloads must be deleted when their tabs are dismissed");
 
+    var newestText = "newest edit wins";
+    store.SaveWindow(new NotepadSessionWindowSnapshot(
+        firstWindowId,
+        [new NotepadSessionDocumentSnapshot(
+            documentState,
+            new StringTextBuffer(newestText).CreateSnapshot())],
+        0,
+        3,
+        DateTimeOffset.UtcNow.AddSeconds(1)));
+    var latestWindow = store.LoadMostRecentWindow();
+    Assert(latestWindow?.Id == firstWindowId
+           && latestWindow.Documents.Single().ModifiedText == newestText,
+        "cold start must restore the window with the newest edit or close timestamp");
+    Assert(store.Load().Windows is [{ Id: var retainedId }] && retainedId == firstWindowId,
+        "claiming the newest recovery candidate must discard older windows");
+
+    var concurrentDirectory = Path.Combine(verificationDirectory, "concurrent-recovery");
+    var concurrentFirst = new NotepadSessionRecoveryStore(concurrentDirectory);
+    var concurrentSecond = new NotepadSessionRecoveryStore(concurrentDirectory);
+    Task.WhenAll(
+        Task.Run(() => concurrentFirst.SaveWindow(new NotepadSessionWindowSnapshot(
+            Guid.NewGuid(),
+            [new NotepadSessionDocumentSnapshot(
+                new NotepadSessionDocumentState(null, null, Id: Guid.NewGuid()),
+                null)],
+            0,
+            1,
+            DateTimeOffset.UtcNow))),
+        Task.Run(() => concurrentSecond.SaveWindow(new NotepadSessionWindowSnapshot(
+            Guid.NewGuid(),
+            [new NotepadSessionDocumentSnapshot(
+                new NotepadSessionDocumentState(null, null, Id: Guid.NewGuid()),
+                null)],
+            0,
+            1,
+            DateTimeOffset.UtcNow)))).GetAwaiter().GetResult();
+    Assert(concurrentFirst.Load().Windows.Length == 2,
+        "independent Notepad processes must merge recovery candidates under an inter-process lock");
+
     store.Clear();
     Assert(store.Load().Windows.Length == 0,
         "starting with a new session must clear the recovery store");
+}
+
+static void VerifyProcessRegistration(string verificationDirectory)
+{
+    var registrationDirectory = Path.Combine(verificationDirectory, "process-registration");
+    using var first = NotepadProcessRegistration.Register(registrationDirectory);
+    Assert(!first.HasOtherActiveProcesses,
+        "the first running Notepad process must be eligible to restore recovery");
+    using (var second = NotepadProcessRegistration.Register(registrationDirectory))
+    {
+        Assert(second.HasOtherActiveProcesses,
+            "a later Notepad process must detect the existing process and start blank");
+    }
+
+    first.Dispose();
+    using var afterExit = NotepadProcessRegistration.Register(registrationDirectory);
+    Assert(!afterExit.HasOtherActiveProcesses,
+        "after the final process exits, the next process must be eligible to restore recovery");
 }
 
 static void VerifyShortcutConventions()

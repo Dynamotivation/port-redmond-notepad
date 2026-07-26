@@ -30,6 +30,9 @@ internal static class NotepadSettingsStore
 
     public static event EventHandler<NotepadSpellingOptions>? SpellingOptionsChanged;
 
+    public static NotepadProcessRegistration RegisterProcess() =>
+        NotepadProcessRegistration.Register(SettingsDirectory);
+
     public static AppThemePreference LoadThemePreference()
     {
         try
@@ -400,6 +403,22 @@ internal static class NotepadSettingsStore
             or NotSupportedException)
         {
             return NotepadSessionState.Empty;
+        }
+    }
+
+    public static NotepadSessionWindowState? LoadMostRecentSessionWindow()
+    {
+        try
+        {
+            return SessionStore.LoadMostRecentWindow();
+        }
+        catch (Exception exception) when (exception is IOException
+            or UnauthorizedAccessException
+            or JsonException
+            or ArgumentException
+            or NotSupportedException)
+        {
+            return null;
         }
     }
 
