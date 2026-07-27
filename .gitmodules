@@ -1,0 +1,3 @@
+[submodule "redmond-commons"]
+	path = redmond-commons
+	url = https://github.com/Dynamotivation/port-redmond-commons.git

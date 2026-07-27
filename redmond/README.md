@@ -46,6 +46,13 @@ dotnet run --project Redmond.Notepad.Verification/Redmond.Notepad.Verification.c
 dotnet run --project Redmond.Notepad.Performance/Redmond.Notepad.Performance.csproj
 ```
 
-The solution intentionally references the sibling `Redmond.Avalonia.Controls`,
-`Redmond.Avalonia.Windowing`, and `Redmond.Shortcuts` projects through relative
-paths. Keep this repository beside those shared Redmond Project directories.
+The solution references `Redmond.Avalonia.Controls`,
+`Redmond.Avalonia.Windowing`, and `Redmond.Shortcuts` from the
+[`port-redmond-commons`](https://github.com/Dynamotivation/port-redmond-commons)
+Git submodule through relative project paths.
+
+Clone `port-redmond-notepad` with its pinned Commons revision:
+
+```sh
+git clone --recurse-submodules https://github.com/Dynamotivation/port-redmond-notepad.git
+```
