@@ -32,7 +32,13 @@ public static class NotepadShortcutIds
 
 public static class NotepadShortcutCatalog
 {
-    public static IReadOnlyList<ShortcutDefinition> CreateDefinitions() =>
+    public static IReadOnlyList<ShortcutDefinition> CreateDefinitions(
+        MacOSShortcutModifier macOSModifier = MacOSShortcutModifier.Command) =>
+        CreateCommandDefinitions()
+            .Select(definition => MacOSShortcutModifierMapping.Apply(definition, macOSModifier))
+            .ToArray();
+
+    private static IReadOnlyList<ShortcutDefinition> CreateCommandDefinitions() =>
     [
         Create(NotepadShortcutIds.NewTab, "N", ShortcutModifiers.Control, "T", ShortcutModifiers.Command),
         Create(NotepadShortcutIds.NewWindow, "N", ShortcutModifiers.Control | ShortcutModifiers.Shift,

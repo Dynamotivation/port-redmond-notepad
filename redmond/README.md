@@ -38,6 +38,22 @@ with its complete path in a tooltip, removes missing entries when selected, and
 provides a separated Clear list command. The Recent Files settings switch can
 hide the menu and pause collection without discarding the saved list.
 
+## Keyboard shortcuts
+
+`NotepadShortcutCatalog` in `Redmond.Notepad.Core` defines every shortcut once,
+with the Windows Notepad binding as the default and a macOS binding that
+follows native conventions (for example ⌘T for a new tab and ⌘G for Find
+next). Menus, the native macOS menu bar, and tooltips read their gesture text
+from the same catalog.
+
+On macOS, Settings → Appearance → *Keyboard shortcuts* chooses the modifier
+that carries those shortcuts: *Command (⌘)*, the default, or *Control (⌃)*.
+Control keeps the macOS keys and swaps only the modifier, so ⌘T becomes ⌃T and
+⌥⌘F becomes ⌃⌥F. The choice applies live to every open window and is stored in
+`macos-shortcut-modifier.txt` in the settings directory. The card is hidden on
+Windows and Linux, where the preference has no effect. System items in the
+macOS application menu, such as Settings… (⌘,), keep Command.
+
 ## Build and verify
 
 ```sh
