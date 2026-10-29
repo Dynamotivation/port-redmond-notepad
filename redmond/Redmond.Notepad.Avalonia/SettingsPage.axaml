@@ -71,6 +71,24 @@
                         Click="OnNativeMacOSMenuBarToggleClick" />
         </shared:SettingsCard>
 
+        <shared:SettingsCard x:Name="MacOSShortcutModifierCard"
+                             Header="Keyboard shortcuts"
+                             Description="Choose whether shortcuts use Command or Control"
+                             IsVisible="False">
+          <shared:SettingsCard.Icon>
+            <TextBlock HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       FontSize="17"
+                       Text="⌃" />
+          </shared:SettingsCard.Icon>
+          <ComboBox x:Name="MacOSShortcutModifierComboBox"
+                    Width="164"
+                    SelectionChanged="OnMacOSShortcutModifierSelectionChanged">
+            <ComboBoxItem Content="Command (⌘)" />
+            <ComboBoxItem Content="Control (⌃)" />
+          </ComboBox>
+        </shared:SettingsCard>
+
         <TextBlock Classes="sectionHeading" Text="Text Formatting" />
         <shared:AnimatedSettingsExpander x:Name="FontSettingsExpander"
                                          Header="Font"

@@ -43,7 +43,7 @@ public partial class MainWindow : Window
     private readonly NotepadSessionWindowState? _initialSession;
     private readonly Guid _sessionId;
     private readonly IShortcutService _shortcutService;
-    private readonly IReadOnlyList<IDisposable> _shortcutRegistrations;
+    private IReadOnlyList<IDisposable> _shortcutRegistrations = [];
     private readonly WindowAppearanceController _appearanceController;
     private readonly IPlatformPrintService _printService;
     private readonly SpellCheckEditorController _spellCheckController;
@@ -57,6 +57,7 @@ public partial class MainWindow : Window
     private AppThemePreference _themePreference;
     private bool _recentFilesEnabled;
     private bool _useNativeMacOSMenuBar;
+    private MacOSShortcutModifier _macOSShortcutModifier;
     private bool _isLoadingTab;
     private bool _isUpdatingTabScrollButtons;
     private bool _isTabWidthUpdateScheduled;
@@ -107,18 +108,15 @@ public partial class MainWindow : Window
         _workspace = new NotepadWorkspace(new AvaloniaEditTextBufferFactory());
         InitializeComponent();
         _shortcutService = ShortcutServices.CreateForCurrentPlatform();
-        _shortcutRegistrations = NotepadShortcutCatalog.CreateDefinitions()
-            .Select(definition => _shortcutService.Register(definition))
-            .ToArray();
+        _macOSShortcutModifier = NotepadSettingsStore.LoadMacOSShortcutModifier();
+        RegisterShortcuts();
         _printService = PlatformPrintServiceFactory.Create();
         _spellCheckController = new SpellCheckEditorController(
             Editor,
             PlatformSpellCheckServiceFactory.Create());
         _spellCheckController.AutocorrectionChanged += OnAutocorrectionChanged;
         Editor.TextArea.RightClickMovesCaret = true;
-        ConfigureFileMenuShortcuts();
-        Resources["CloseTabToolTip"] = FormatCommandToolTip("Close tab", NotepadShortcutIds.CloseTab);
-        Resources["NewTabToolTip"] = FormatCommandToolTip("New tab", NotepadShortcutIds.NewTab);
+        ApplyShortcutGestures();
         AddHandler(KeyDownEvent, OnNotepadKeyDown, RoutingStrategies.Tunnel);
         AddHandler(PointerMovedEvent, OnWindowPointerMoved, RoutingStrategies.Tunnel);
         AddHandler(PointerReleasedEvent, OnTabsPointerReleased, RoutingStrategies.Tunnel);
@@ -142,6 +140,7 @@ public partial class MainWindow : Window
         SettingsPage.SetWordWrap(_viewOptions.WordWrap);
         SettingsPage.SetFormattingEnabled(_viewOptions.FormattingEnabled);
         SettingsPage.SetUseNativeMacOSMenuBar(_useNativeMacOSMenuBar);
+        SettingsPage.SetMacOSShortcutModifier(_macOSShortcutModifier);
         SettingsPage.SetFontOptions(_fontOptions);
         SettingsPage.SetOpeningOptions(_openingOptions);
         SettingsPage.SetSpellingOptions(_spellingOptions);
@@ -151,12 +150,14 @@ public partial class MainWindow : Window
         SettingsPage.WordWrapChanged += OnSettingsWordWrapChanged;
         SettingsPage.FormattingEnabledChanged += OnFormattingEnabledChanged;
         SettingsPage.NativeMacOSMenuBarChanged += OnNativeMacOSMenuBarChanged;
+        SettingsPage.MacOSShortcutModifierChanged += OnMacOSShortcutModifierChanged;
         SettingsPage.FontOptionsChanged += OnFontOptionsChanged;
         SettingsPage.OpeningOptionsChanged += OnOpeningOptionsChanged;
         SettingsPage.SpellingOptionsChanged += OnSpellingOptionsChanged;
         NotepadSettingsStore.FontOptionsChanged += OnGlobalFontOptionsChanged;
         NotepadSettingsStore.OpeningOptionsChanged += OnGlobalOpeningOptionsChanged;
         NotepadSettingsStore.NativeMacOSMenuBarChanged += OnGlobalNativeMacOSMenuBarChanged;
+        NotepadSettingsStore.MacOSShortcutModifierChanged += OnGlobalMacOSShortcutModifierChanged;
         NotepadSettingsStore.SpellingOptionsChanged += OnGlobalSpellingOptionsChanged;
         foreach (var tab in _workspace.Tabs)
         {
@@ -211,6 +212,7 @@ public partial class MainWindow : Window
         SettingsPage.SetWordWrap(_viewOptions.WordWrap);
         SettingsPage.SetFormattingEnabled(_viewOptions.FormattingEnabled);
         SettingsPage.SetUseNativeMacOSMenuBar(_useNativeMacOSMenuBar);
+        SettingsPage.SetMacOSShortcutModifier(_macOSShortcutModifier);
         SettingsPage.SetFontOptions(_fontOptions);
         SettingsPage.SetOpeningOptions(_openingOptions);
         SettingsPage.SetSpellingOptions(_spellingOptions);
@@ -282,6 +284,22 @@ public partial class MainWindow : Window
         _useNativeMacOSMenuBar = enabled;
         SettingsPage.SetUseNativeMacOSMenuBar(enabled);
         ApplyMacOSMenuPresentation();
+    }
+
+    private void OnMacOSShortcutModifierChanged(object? sender, MacOSShortcutModifier modifier) =>
+        NotepadSettingsStore.SaveMacOSShortcutModifier(modifier);
+
+    private void OnGlobalMacOSShortcutModifierChanged(object? sender, MacOSShortcutModifier modifier)
+    {
+        if (_macOSShortcutModifier == modifier)
+        {
+            return;
+        }
+
+        _macOSShortcutModifier = modifier;
+        SettingsPage.SetMacOSShortcutModifier(modifier);
+        RegisterShortcuts();
+        ApplyShortcutGestures();
     }
 
     private void OnFontOptionsChanged(object? sender, NotepadFontOptions options) =>
@@ -1345,6 +1363,26 @@ public partial class MainWindow : Window
         }
     }
 
+    private void RegisterShortcuts()
+    {
+        foreach (var registration in _shortcutRegistrations)
+        {
+            registration.Dispose();
+        }
+
+        _shortcutRegistrations = NotepadShortcutCatalog.CreateDefinitions(_macOSShortcutModifier)
+            .Select(definition => _shortcutService.Register(definition))
+            .ToArray();
+    }
+
+    private void ApplyShortcutGestures()
+    {
+        ConfigureFileMenuShortcuts();
+        RefreshNativeMenuGestures();
+        Resources["CloseTabToolTip"] = FormatCommandToolTip("Close tab", NotepadShortcutIds.CloseTab);
+        Resources["NewTabToolTip"] = FormatCommandToolTip("New tab", NotepadShortcutIds.NewTab);
+    }
+
     private void ConfigureFileMenuShortcuts()
     {
         Apply(NewTabMenuItem, NotepadShortcutIds.NewTab);
@@ -1501,6 +1539,7 @@ public partial class MainWindow : Window
         NotepadSettingsStore.FontOptionsChanged -= OnGlobalFontOptionsChanged;
         NotepadSettingsStore.OpeningOptionsChanged -= OnGlobalOpeningOptionsChanged;
         NotepadSettingsStore.NativeMacOSMenuBarChanged -= OnGlobalNativeMacOSMenuBarChanged;
+        NotepadSettingsStore.MacOSShortcutModifierChanged -= OnGlobalMacOSShortcutModifierChanged;
         NotepadSettingsStore.SpellingOptionsChanged -= OnGlobalSpellingOptionsChanged;
         _externalChangeCheckCancellation?.Cancel();
         _externalChangeCheckCancellation?.Dispose();

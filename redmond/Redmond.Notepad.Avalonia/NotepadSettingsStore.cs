@@ -19,6 +19,7 @@ internal static class NotepadSettingsStore
     private static readonly string FontPath = Path.Combine(SettingsDirectory, "editor-font.json");
     private static readonly string OpeningPath = Path.Combine(SettingsDirectory, "opening.json");
     private static readonly string NativeMacOSMenuBarPath = Path.Combine(SettingsDirectory, "native-macos-menu-bar.txt");
+    private static readonly string MacOSShortcutModifierPath = Path.Combine(SettingsDirectory, "macos-shortcut-modifier.txt");
     private static readonly string SpellingPath = Path.Combine(SettingsDirectory, "spelling.json");
     private static readonly NotepadSessionRecoveryStore SessionStore = new(SettingsDirectory);
 
@@ -27,6 +28,8 @@ internal static class NotepadSettingsStore
     public static event EventHandler<NotepadOpeningOptions>? OpeningOptionsChanged;
 
     public static event EventHandler<bool>? NativeMacOSMenuBarChanged;
+
+    public static event EventHandler<MacOSShortcutModifier>? MacOSShortcutModifierChanged;
 
     public static event EventHandler<NotepadSpellingOptions>? SpellingOptionsChanged;
 
@@ -199,6 +202,48 @@ internal static class NotepadSettingsStore
         }
 
         NativeMacOSMenuBarChanged?.Invoke(null, enabled);
+    }
+
+    public static MacOSShortcutModifier LoadMacOSShortcutModifier()
+    {
+        try
+        {
+            return File.Exists(MacOSShortcutModifierPath)
+                && Enum.TryParse<MacOSShortcutModifier>(
+                    File.ReadAllText(MacOSShortcutModifierPath).Trim(),
+                    ignoreCase: true,
+                    out var modifier)
+                && Enum.IsDefined(modifier)
+                    ? modifier
+                    : MacOSShortcutModifier.Command;
+        }
+        catch (IOException)
+        {
+            return MacOSShortcutModifier.Command;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return MacOSShortcutModifier.Command;
+        }
+    }
+
+    public static void SaveMacOSShortcutModifier(MacOSShortcutModifier modifier)
+    {
+        try
+        {
+            Directory.CreateDirectory(SettingsDirectory);
+            File.WriteAllText(MacOSShortcutModifierPath, modifier.ToString());
+        }
+        catch (IOException)
+        {
+            // The setting remains live when persistence is unavailable.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // The setting remains live when persistence is unavailable.
+        }
+
+        MacOSShortcutModifierChanged?.Invoke(null, modifier);
     }
 
     public static RecentFileList LoadRecentFiles()

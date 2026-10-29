@@ -15,6 +15,7 @@ public partial class SettingsPage : UserControl
     private bool _isUpdatingFont;
     private bool _isUpdatingDocumentOptions;
     private bool _isUpdatingSpelling;
+    private bool _isUpdatingShortcutModifier;
 
     public SettingsPage()
     {
@@ -29,6 +30,7 @@ public partial class SettingsPage : UserControl
 
         FontFamilyComboBox.ItemsSource = _fontFamilies;
         NativeMacOSMenuBarCard.IsVisible = OperatingSystem.IsMacOS();
+        MacOSShortcutModifierCard.IsVisible = OperatingSystem.IsMacOS();
         WindowAppearancePanel.AppearanceChanged += OnAppearanceChanged;
         SizeChanged += (_, _) => UpdateResponsiveLayout(Bounds.Width);
         AttachedToVisualTree += (_, _) => UpdateResponsiveLayout(Bounds.Width);
@@ -45,6 +47,8 @@ public partial class SettingsPage : UserControl
     public event EventHandler<bool>? FormattingEnabledChanged;
 
     public event EventHandler<bool>? NativeMacOSMenuBarChanged;
+
+    internal event EventHandler<MacOSShortcutModifier>? MacOSShortcutModifierChanged;
 
     internal event EventHandler<NotepadOpeningOptions>? OpeningOptionsChanged;
 
@@ -72,6 +76,13 @@ public partial class SettingsPage : UserControl
 
     public void SetUseNativeMacOSMenuBar(bool enabled) =>
         NativeMacOSMenuBarToggle.IsChecked = enabled;
+
+    internal void SetMacOSShortcutModifier(MacOSShortcutModifier modifier)
+    {
+        _isUpdatingShortcutModifier = true;
+        MacOSShortcutModifierComboBox.SelectedIndex = modifier == MacOSShortcutModifier.Control ? 1 : 0;
+        _isUpdatingShortcutModifier = false;
+    }
 
     internal void SetSpellingOptions(NotepadSpellingOptions options)
     {
@@ -152,6 +163,20 @@ public partial class SettingsPage : UserControl
 
     private void OnNativeMacOSMenuBarToggleClick(object? sender, RoutedEventArgs e) =>
         NativeMacOSMenuBarChanged?.Invoke(this, NativeMacOSMenuBarToggle.IsChecked == true);
+
+    private void OnMacOSShortcutModifierSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdatingShortcutModifier)
+        {
+            return;
+        }
+
+        MacOSShortcutModifierChanged?.Invoke(
+            this,
+            MacOSShortcutModifierComboBox.SelectedIndex == 1
+                ? MacOSShortcutModifier.Control
+                : MacOSShortcutModifier.Command);
+    }
 
     private void OnSpellingToggleClick(object? sender, RoutedEventArgs e)
     {
