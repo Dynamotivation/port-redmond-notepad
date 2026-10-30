@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Redmond.Avalonia.Controls;
 using Redmond.Notepad.Core;
+using Redmond.Shortcuts;
 
 namespace Redmond.Notepad.Avalonia;
 
@@ -19,7 +20,7 @@ internal static class NotepadSettingsStore
     private static readonly string FontPath = Path.Combine(SettingsDirectory, "editor-font.json");
     private static readonly string OpeningPath = Path.Combine(SettingsDirectory, "opening.json");
     private static readonly string NativeMacOSMenuBarPath = Path.Combine(SettingsDirectory, "native-macos-menu-bar.txt");
-    private static readonly string MacOSShortcutModifierPath = Path.Combine(SettingsDirectory, "macos-shortcut-modifier.txt");
+    private static readonly string MacPrimaryModifierPath = Path.Combine(SettingsDirectory, "macos-shortcut-modifier.txt");
     private static readonly string SpellingPath = Path.Combine(SettingsDirectory, "spelling.json");
     private static readonly NotepadSessionRecoveryStore SessionStore = new(SettingsDirectory);
 
@@ -29,7 +30,7 @@ internal static class NotepadSettingsStore
 
     public static event EventHandler<bool>? NativeMacOSMenuBarChanged;
 
-    public static event EventHandler<MacOSShortcutModifier>? MacOSShortcutModifierChanged;
+    public static event EventHandler<MacPrimaryModifier>? MacPrimaryModifierChanged;
 
     public static event EventHandler<NotepadSpellingOptions>? SpellingOptionsChanged;
 
@@ -204,35 +205,35 @@ internal static class NotepadSettingsStore
         NativeMacOSMenuBarChanged?.Invoke(null, enabled);
     }
 
-    public static MacOSShortcutModifier LoadMacOSShortcutModifier()
+    public static MacPrimaryModifier LoadMacPrimaryModifier()
     {
         try
         {
-            return File.Exists(MacOSShortcutModifierPath)
-                && Enum.TryParse<MacOSShortcutModifier>(
-                    File.ReadAllText(MacOSShortcutModifierPath).Trim(),
+            return File.Exists(MacPrimaryModifierPath)
+                && Enum.TryParse<MacPrimaryModifier>(
+                    File.ReadAllText(MacPrimaryModifierPath).Trim(),
                     ignoreCase: true,
                     out var modifier)
                 && Enum.IsDefined(modifier)
                     ? modifier
-                    : MacOSShortcutModifier.Command;
+                    : MacPrimaryModifier.Command;
         }
         catch (IOException)
         {
-            return MacOSShortcutModifier.Command;
+            return MacPrimaryModifier.Command;
         }
         catch (UnauthorizedAccessException)
         {
-            return MacOSShortcutModifier.Command;
+            return MacPrimaryModifier.Command;
         }
     }
 
-    public static void SaveMacOSShortcutModifier(MacOSShortcutModifier modifier)
+    public static void SaveMacPrimaryModifier(MacPrimaryModifier modifier)
     {
         try
         {
             Directory.CreateDirectory(SettingsDirectory);
-            File.WriteAllText(MacOSShortcutModifierPath, modifier.ToString());
+            File.WriteAllText(MacPrimaryModifierPath, modifier.ToString());
         }
         catch (IOException)
         {
@@ -243,7 +244,7 @@ internal static class NotepadSettingsStore
             // The setting remains live when persistence is unavailable.
         }
 
-        MacOSShortcutModifierChanged?.Invoke(null, modifier);
+        MacPrimaryModifierChanged?.Invoke(null, modifier);
     }
 
     public static RecentFileList LoadRecentFiles()

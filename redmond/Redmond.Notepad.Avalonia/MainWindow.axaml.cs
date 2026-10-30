@@ -43,7 +43,7 @@ public partial class MainWindow : Window
     private readonly NotepadSessionWindowState? _initialSession;
     private readonly Guid _sessionId;
     private readonly IShortcutService _shortcutService;
-    private IReadOnlyList<IDisposable> _shortcutRegistrations = [];
+    private readonly IReadOnlyList<IDisposable> _shortcutRegistrations;
     private readonly WindowAppearanceController _appearanceController;
     private readonly IPlatformPrintService _printService;
     private readonly SpellCheckEditorController _spellCheckController;
@@ -57,7 +57,6 @@ public partial class MainWindow : Window
     private AppThemePreference _themePreference;
     private bool _recentFilesEnabled;
     private bool _useNativeMacOSMenuBar;
-    private MacOSShortcutModifier _macOSShortcutModifier;
     private bool _isLoadingTab;
     private bool _isUpdatingTabScrollButtons;
     private bool _isTabWidthUpdateScheduled;
@@ -107,9 +106,13 @@ public partial class MainWindow : Window
         _recoveryUpdatedAtUtc = session?.UpdatedAtUtc ?? default;
         _workspace = new NotepadWorkspace(new AvaloniaEditTextBufferFactory());
         InitializeComponent();
-        _shortcutService = ShortcutServices.CreateForCurrentPlatform();
-        _macOSShortcutModifier = NotepadSettingsStore.LoadMacOSShortcutModifier();
-        RegisterShortcuts();
+        _shortcutService = ShortcutServices.CreateForCurrentPlatform(new ShortcutServiceOptions
+        {
+            MacPrimaryModifier = NotepadSettingsStore.LoadMacPrimaryModifier(),
+        });
+        _shortcutRegistrations = NotepadShortcutCatalog.CreateDefinitions()
+            .Select(definition => _shortcutService.Register(definition))
+            .ToArray();
         _printService = PlatformPrintServiceFactory.Create();
         _spellCheckController = new SpellCheckEditorController(
             Editor,
@@ -140,7 +143,7 @@ public partial class MainWindow : Window
         SettingsPage.SetWordWrap(_viewOptions.WordWrap);
         SettingsPage.SetFormattingEnabled(_viewOptions.FormattingEnabled);
         SettingsPage.SetUseNativeMacOSMenuBar(_useNativeMacOSMenuBar);
-        SettingsPage.SetMacOSShortcutModifier(_macOSShortcutModifier);
+        SettingsPage.SetMacPrimaryModifier(_shortcutService.MacPrimaryModifier);
         SettingsPage.SetFontOptions(_fontOptions);
         SettingsPage.SetOpeningOptions(_openingOptions);
         SettingsPage.SetSpellingOptions(_spellingOptions);
@@ -150,14 +153,14 @@ public partial class MainWindow : Window
         SettingsPage.WordWrapChanged += OnSettingsWordWrapChanged;
         SettingsPage.FormattingEnabledChanged += OnFormattingEnabledChanged;
         SettingsPage.NativeMacOSMenuBarChanged += OnNativeMacOSMenuBarChanged;
-        SettingsPage.MacOSShortcutModifierChanged += OnMacOSShortcutModifierChanged;
+        SettingsPage.MacPrimaryModifierChanged += OnMacPrimaryModifierChanged;
         SettingsPage.FontOptionsChanged += OnFontOptionsChanged;
         SettingsPage.OpeningOptionsChanged += OnOpeningOptionsChanged;
         SettingsPage.SpellingOptionsChanged += OnSpellingOptionsChanged;
         NotepadSettingsStore.FontOptionsChanged += OnGlobalFontOptionsChanged;
         NotepadSettingsStore.OpeningOptionsChanged += OnGlobalOpeningOptionsChanged;
         NotepadSettingsStore.NativeMacOSMenuBarChanged += OnGlobalNativeMacOSMenuBarChanged;
-        NotepadSettingsStore.MacOSShortcutModifierChanged += OnGlobalMacOSShortcutModifierChanged;
+        NotepadSettingsStore.MacPrimaryModifierChanged += OnGlobalMacPrimaryModifierChanged;
         NotepadSettingsStore.SpellingOptionsChanged += OnGlobalSpellingOptionsChanged;
         foreach (var tab in _workspace.Tabs)
         {
@@ -212,7 +215,7 @@ public partial class MainWindow : Window
         SettingsPage.SetWordWrap(_viewOptions.WordWrap);
         SettingsPage.SetFormattingEnabled(_viewOptions.FormattingEnabled);
         SettingsPage.SetUseNativeMacOSMenuBar(_useNativeMacOSMenuBar);
-        SettingsPage.SetMacOSShortcutModifier(_macOSShortcutModifier);
+        SettingsPage.SetMacPrimaryModifier(_shortcutService.MacPrimaryModifier);
         SettingsPage.SetFontOptions(_fontOptions);
         SettingsPage.SetOpeningOptions(_openingOptions);
         SettingsPage.SetSpellingOptions(_spellingOptions);
@@ -286,19 +289,18 @@ public partial class MainWindow : Window
         ApplyMacOSMenuPresentation();
     }
 
-    private void OnMacOSShortcutModifierChanged(object? sender, MacOSShortcutModifier modifier) =>
-        NotepadSettingsStore.SaveMacOSShortcutModifier(modifier);
+    private void OnMacPrimaryModifierChanged(object? sender, MacPrimaryModifier modifier) =>
+        NotepadSettingsStore.SaveMacPrimaryModifier(modifier);
 
-    private void OnGlobalMacOSShortcutModifierChanged(object? sender, MacOSShortcutModifier modifier)
+    private void OnGlobalMacPrimaryModifierChanged(object? sender, MacPrimaryModifier modifier)
     {
-        if (_macOSShortcutModifier == modifier)
+        if (_shortcutService.MacPrimaryModifier == modifier)
         {
             return;
         }
 
-        _macOSShortcutModifier = modifier;
-        SettingsPage.SetMacOSShortcutModifier(modifier);
-        RegisterShortcuts();
+        _shortcutService.MacPrimaryModifier = modifier;
+        SettingsPage.SetMacPrimaryModifier(modifier);
         ApplyShortcutGestures();
     }
 
@@ -1363,18 +1365,6 @@ public partial class MainWindow : Window
         }
     }
 
-    private void RegisterShortcuts()
-    {
-        foreach (var registration in _shortcutRegistrations)
-        {
-            registration.Dispose();
-        }
-
-        _shortcutRegistrations = NotepadShortcutCatalog.CreateDefinitions(_macOSShortcutModifier)
-            .Select(definition => _shortcutService.Register(definition))
-            .ToArray();
-    }
-
     private void ApplyShortcutGestures()
     {
         ConfigureFileMenuShortcuts();
@@ -1411,8 +1401,11 @@ public partial class MainWindow : Window
         Apply(RestoreZoomMenuItem, NotepadShortcutIds.RestoreDefaultZoom);
         return;
 
-        void Apply(MenuItem item, string shortcutId) =>
+        void Apply(MenuItem item, string shortcutId)
+        {
             item.InputGesture = AvaloniaShortcutAdapter.ToKeyGesture(_shortcutService.GetGesture(shortcutId));
+            MenuItemShortcut.SetText(item, _shortcutService.GetGestureDisplayText(shortcutId));
+        }
     }
 
     private string FormatCommandToolTip(string commandName, string shortcutId) =>
@@ -1539,7 +1532,7 @@ public partial class MainWindow : Window
         NotepadSettingsStore.FontOptionsChanged -= OnGlobalFontOptionsChanged;
         NotepadSettingsStore.OpeningOptionsChanged -= OnGlobalOpeningOptionsChanged;
         NotepadSettingsStore.NativeMacOSMenuBarChanged -= OnGlobalNativeMacOSMenuBarChanged;
-        NotepadSettingsStore.MacOSShortcutModifierChanged -= OnGlobalMacOSShortcutModifierChanged;
+        NotepadSettingsStore.MacPrimaryModifierChanged -= OnGlobalMacPrimaryModifierChanged;
         NotepadSettingsStore.SpellingOptionsChanged -= OnGlobalSpellingOptionsChanged;
         _externalChangeCheckCancellation?.Cancel();
         _externalChangeCheckCancellation?.Dispose();

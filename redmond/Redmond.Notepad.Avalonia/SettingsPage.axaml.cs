@@ -4,6 +4,7 @@ using Avalonia.Media;
 using System.Collections.ObjectModel;
 using Redmond.Avalonia.Controls;
 using Redmond.Notepad.Core;
+using Redmond.Shortcuts;
 
 namespace Redmond.Notepad.Avalonia;
 
@@ -48,7 +49,7 @@ public partial class SettingsPage : UserControl
 
     public event EventHandler<bool>? NativeMacOSMenuBarChanged;
 
-    internal event EventHandler<MacOSShortcutModifier>? MacOSShortcutModifierChanged;
+    internal event EventHandler<MacPrimaryModifier>? MacPrimaryModifierChanged;
 
     internal event EventHandler<NotepadOpeningOptions>? OpeningOptionsChanged;
 
@@ -77,10 +78,10 @@ public partial class SettingsPage : UserControl
     public void SetUseNativeMacOSMenuBar(bool enabled) =>
         NativeMacOSMenuBarToggle.IsChecked = enabled;
 
-    internal void SetMacOSShortcutModifier(MacOSShortcutModifier modifier)
+    internal void SetMacPrimaryModifier(MacPrimaryModifier modifier)
     {
         _isUpdatingShortcutModifier = true;
-        MacOSShortcutModifierComboBox.SelectedIndex = modifier == MacOSShortcutModifier.Control ? 1 : 0;
+        MacOSShortcutModifierComboBox.SelectedIndex = modifier == MacPrimaryModifier.Control ? 1 : 0;
         _isUpdatingShortcutModifier = false;
     }
 
@@ -171,11 +172,11 @@ public partial class SettingsPage : UserControl
             return;
         }
 
-        MacOSShortcutModifierChanged?.Invoke(
+        MacPrimaryModifierChanged?.Invoke(
             this,
             MacOSShortcutModifierComboBox.SelectedIndex == 1
-                ? MacOSShortcutModifier.Control
-                : MacOSShortcutModifier.Command);
+                ? MacPrimaryModifier.Control
+                : MacPrimaryModifier.Command);
     }
 
     private void OnSpellingToggleClick(object? sender, RoutedEventArgs e)
