@@ -290,35 +290,44 @@ static void VerifyProcessRegistration(string verificationDirectory)
         "after the final process exits, the next process must be eligible to restore recovery");
 }
 
-static void VerifyShortcutConventions()
+static ShortcutService CreateShortcutService(
+    ShortcutPlatform platform,
+    MacPrimaryModifier macModifier = MacPrimaryModifier.Command,
+    string culture = "en-US")
 {
-    var definitions = NotepadShortcutCatalog.CreateDefinitions();
-    var windows = new ShortcutService(ShortcutPlatform.Windows);
-    var macOS = new ShortcutService(ShortcutPlatform.MacOS);
-    foreach (var definition in definitions)
+    var service = new ShortcutService(platform, new ShortcutServiceOptions
     {
-        windows.Register(definition);
-        macOS.Register(definition);
+        MacPrimaryModifier = macModifier,
+        LabelCulture = System.Globalization.CultureInfo.GetCultureInfo(culture),
+    });
+    foreach (var definition in NotepadShortcutCatalog.CreateDefinitions())
+    {
+        service.Register(definition);
     }
 
-    Assert(windows.GetGestureDisplayText(NotepadShortcutIds.NewTab) == "Ctrl+N",
-        "Windows new-tab shortcut must preserve the reference Notepad binding");
-    Assert(macOS.GetGestureDisplayText(NotepadShortcutIds.NewTab) == "⌘T",
-        "macOS new-tab shortcut must follow the native tab convention");
-    Assert(macOS.GetGestureDisplayText(NotepadShortcutIds.NewWindow) == "⌘N",
-        "macOS new-window shortcut must follow the native document-window convention");
-    Assert(macOS.GetGestureDisplayText(NotepadShortcutIds.SaveAll) == "⌥⌘S",
-        "macOS Save All must avoid Windows Control/Alt semantics");
-    Assert(windows.GetGestureDisplayText(NotepadShortcutIds.FindNext) == "F3",
-        "Windows Find next must preserve the reference Notepad binding");
-    Assert(macOS.GetGestureDisplayText(NotepadShortcutIds.FindNext) == "⌘G",
-        "macOS Find next must use the native application convention");
-    Assert(windows.GetGestureDisplayText(NotepadShortcutIds.Replace) == "Ctrl+H",
-        "Windows Replace must preserve the reference Notepad binding");
-    Assert(macOS.GetGestureDisplayText(NotepadShortcutIds.Replace) == "⌥⌘F",
-        "macOS Replace must avoid the browser-history Command+Shift+H convention");
-    var windowsEditGestures = new Dictionary<string, string>
+    return service;
+}
+
+static ShortcutInput ShortcutInputFor(string key, ShortcutModifiers modifiers) =>
+    new(new ShortcutGesture(ShortcutKey.Named(key), modifiers));
+
+static void VerifyShortcutConventions()
+{
+    var windows = CreateShortcutService(ShortcutPlatform.Windows);
+    var linux = CreateShortcutService(ShortcutPlatform.Linux);
+    var macOS = CreateShortcutService(ShortcutPlatform.MacOS);
+
+    var windowsGestures = new Dictionary<string, string>
     {
+        [NotepadShortcutIds.NewTab] = "Ctrl+N",
+        [NotepadShortcutIds.NewWindow] = "Ctrl+Shift+N",
+        [NotepadShortcutIds.Open] = "Ctrl+O",
+        [NotepadShortcutIds.Save] = "Ctrl+S",
+        [NotepadShortcutIds.SaveAs] = "Ctrl+Shift+S",
+        [NotepadShortcutIds.SaveAll] = "Ctrl+Alt+S",
+        [NotepadShortcutIds.Print] = "Ctrl+P",
+        [NotepadShortcutIds.CloseTab] = "Ctrl+W",
+        [NotepadShortcutIds.CloseWindow] = "Ctrl+Shift+W",
         [NotepadShortcutIds.Undo] = "Ctrl+Z",
         [NotepadShortcutIds.Cut] = "Ctrl+X",
         [NotepadShortcutIds.Copy] = "Ctrl+C",
@@ -331,82 +340,109 @@ static void VerifyShortcutConventions()
         [NotepadShortcutIds.GoTo] = "Ctrl+G",
         [NotepadShortcutIds.SelectAll] = "Ctrl+A",
         [NotepadShortcutIds.TimeDate] = "F5",
+        [NotepadShortcutIds.ZoomIn] = "Ctrl+Plus",
+        [NotepadShortcutIds.ZoomOut] = "Ctrl+Minus",
+        [NotepadShortcutIds.RestoreDefaultZoom] = "Ctrl+0",
     };
-    foreach (var (shortcutId, expectedGesture) in windowsEditGestures)
+    foreach (var (shortcutId, expectedGesture) in windowsGestures)
     {
-        Assert(windows.GetGestureDisplayText(shortcutId) == expectedGesture,
-            $"Windows {shortcutId} must display as {expectedGesture}");
+        var actual = windows.GetGestureDisplayText(shortcutId);
+        Assert(actual == expectedGesture,
+            $"Windows {shortcutId} must display as {expectedGesture}, not {actual}");
+        Assert(linux.GetGestureDisplayText(shortcutId) == expectedGesture,
+            $"Linux {shortcutId} must match Windows ({expectedGesture})");
+    }
+
+    var macOSGestures = new Dictionary<string, string>
+    {
+        [NotepadShortcutIds.NewTab] = "⌘N",
+        [NotepadShortcutIds.NewWindow] = "⇧⌘N",
+        [NotepadShortcutIds.SaveAll] = "⌥⌘S",
+        [NotepadShortcutIds.Delete] = "⌦",
+        [NotepadShortcutIds.FindNext] = "F3",
+        [NotepadShortcutIds.FindPrevious] = "⇧F3",
+        [NotepadShortcutIds.Replace] = "⌘H",
+        [NotepadShortcutIds.GoTo] = "⌘G",
+        [NotepadShortcutIds.TimeDate] = "F5",
+        [NotepadShortcutIds.ZoomIn] = "⌘+",
+        [NotepadShortcutIds.RestoreDefaultZoom] = "⌘0",
+    };
+    foreach (var (shortcutId, expectedGesture) in macOSGestures)
+    {
+        var actual = macOS.GetGestureDisplayText(shortcutId);
+        Assert(actual == expectedGesture,
+            $"macOS {shortcutId} must display as {expectedGesture}, not {actual}");
+    }
+
+    // No platform has its own keys: macOS uses the Windows gesture with only
+    // Ctrl replaced by Command.
+    foreach (var definition in NotepadShortcutCatalog.CreateDefinitions())
+    {
+        var expected = definition.ResolveGestures(ShortcutPlatform.Windows)
+            .Select(gesture => gesture.Modifiers.HasFlag(ShortcutModifiers.Control)
+                ? new ShortcutGesture(
+                    gesture.Key,
+                    (gesture.Modifiers & ~ShortcutModifiers.Control) | ShortcutModifiers.Command)
+                : gesture);
+        Assert(definition.ResolveGestures(ShortcutPlatform.MacOS).SequenceEqual(expected),
+            $"macOS {definition.Id} must be the Windows gesture with Command for Ctrl");
     }
 
     Assert(windows.IsMatch(
             NotepadShortcutIds.ZoomIn,
-            new ShortcutInput(new ShortcutGesture(
-                ShortcutKey.Named("OemPlus"),
-                ShortcutModifiers.Control | ShortcutModifiers.Shift))),
+            ShortcutInputFor("OemPlus", ShortcutModifiers.Control | ShortcutModifiers.Shift)),
         "Windows Zoom in must accept the shifted plus key");
-    Assert(windows.IsMatch(
-            NotepadShortcutIds.ZoomOut,
-            new ShortcutInput(new ShortcutGesture(
-                ShortcutKey.Named("NumPadSubtract"),
-                ShortcutModifiers.Control))),
+    Assert(windows.IsMatch(NotepadShortcutIds.ZoomOut, ShortcutInputFor("NumPadSubtract", ShortcutModifiers.Control)),
         "Windows Zoom out must accept the numeric-keypad minus key");
     Assert(macOS.IsMatch(
             NotepadShortcutIds.ZoomIn,
-            new ShortcutInput(new ShortcutGesture(
-                ShortcutKey.Named("OemPlus"),
-                ShortcutModifiers.Command | ShortcutModifiers.Shift))),
+            ShortcutInputFor("OemPlus", ShortcutModifiers.Command | ShortcutModifiers.Shift)),
         "macOS Zoom in must use Command and accept the shifted plus key");
-    Assert(macOS.IsMatch(
-            NotepadShortcutIds.RestoreDefaultZoom,
-            new ShortcutInput(new ShortcutGesture(
-                ShortcutKey.Named("D0"),
-                ShortcutModifiers.Command))),
+    Assert(macOS.IsMatch(NotepadShortcutIds.RestoreDefaultZoom, ShortcutInputFor("D0", ShortcutModifiers.Command)),
         "macOS Restore default zoom must use Command+0");
+    Assert(macOS.IsMatch(NotepadShortcutIds.FindNext, ShortcutInputFor("F3", ShortcutModifiers.None)),
+        "macOS Find next must use F3 like Windows");
+    Assert(!macOS.IsMatch(NotepadShortcutIds.FindNext, ShortcutInputFor("G", ShortcutModifiers.Command)),
+        "macOS must not keep a platform-only Find next gesture");
+
+    var german = CreateShortcutService(ShortcutPlatform.Windows, culture: "de-DE");
+    Assert(german.GetGestureDisplayText(NotepadShortcutIds.SaveAs) == "Strg+Umschalt+S",
+        "German Windows labels must use Strg and Umschalt");
+    Assert(german.GetGestureDisplayText(NotepadShortcutIds.Delete) == "Entf",
+        "German Windows labels must name the Delete key Entf");
+    Assert(german.FormatText(NotepadShortcutIds.NewTab, "Neuer Tab ({shortcut})") == "Neuer Tab (Strg+N)",
+        "tooltips must use the shared localized labels");
 
     Assert(windows.GetConflicts().Count == 0 && macOS.GetConflicts().Count == 0,
-        "Notepad shortcut catalogs must not contain duplicate active gestures");
+        "Notepad shortcuts must not contain duplicate active gestures");
     Assert(macOS.ValidateConventions().All(issue => issue.Severity != ShortcutConventionSeverity.Error),
-        "macOS shortcut catalog must avoid reserved or conflicting system gestures");
+        "macOS shortcuts must avoid reserved or conflicting system gestures");
 }
 
 static void VerifyMacOSShortcutModifierPreference()
 {
-    static ShortcutService CreateService(ShortcutPlatform platform, MacOSShortcutModifier modifier)
-    {
-        var service = new ShortcutService(platform);
-        foreach (var definition in NotepadShortcutCatalog.CreateDefinitions(modifier))
-        {
-            service.Register(definition);
-        }
-
-        return service;
-    }
-
-    static ShortcutInput Input(string key, ShortcutModifiers modifiers) =>
-        new(new ShortcutGesture(ShortcutKey.Named(key), modifiers));
-
     var macDefault = new ShortcutService(ShortcutPlatform.MacOS);
     foreach (var definition in NotepadShortcutCatalog.CreateDefinitions())
     {
         macDefault.Register(definition);
     }
 
-    var macCommand = CreateService(ShortcutPlatform.MacOS, MacOSShortcutModifier.Command);
-    var macControl = CreateService(ShortcutPlatform.MacOS, MacOSShortcutModifier.Control);
-    Assert(macDefault.GetGestureDisplayText(NotepadShortcutIds.Save) == "⌘S",
+    Assert(macDefault.MacPrimaryModifier == MacPrimaryModifier.Command
+            && macDefault.GetGesture(NotepadShortcutIds.Save).Modifiers == ShortcutModifiers.Command,
         "macOS shortcuts must default to Command");
-    Assert(macCommand.GetGestureDisplayText(NotepadShortcutIds.NewTab) == "⌘T",
-        "the Command preference must keep the native macOS bindings");
 
+    var macCommand = CreateShortcutService(ShortcutPlatform.MacOS, MacPrimaryModifier.Command);
+    var macControl = CreateShortcutService(ShortcutPlatform.MacOS, MacPrimaryModifier.Control);
     var expectedControlGestures = new Dictionary<string, string>
     {
-        [NotepadShortcutIds.NewTab] = "⌃T",
+        [NotepadShortcutIds.NewTab] = "⌃N",
         [NotepadShortcutIds.Save] = "⌃S",
         [NotepadShortcutIds.SaveAs] = "⌃⇧S",
         [NotepadShortcutIds.SaveAll] = "⌃⌥S",
         [NotepadShortcutIds.Copy] = "⌃C",
-        [NotepadShortcutIds.FindNext] = "⌃G",
-        [NotepadShortcutIds.Replace] = "⌃⌥F",
+        [NotepadShortcutIds.FindNext] = "F3",
+        [NotepadShortcutIds.Replace] = "⌃H",
+        [NotepadShortcutIds.GoTo] = "⌃G",
         [NotepadShortcutIds.Delete] = "⌦",
         [NotepadShortcutIds.TimeDate] = "F5",
     };
@@ -417,29 +453,43 @@ static void VerifyMacOSShortcutModifierPreference()
             $"the macOS Control preference must display {shortcutId} as {expectedGesture}, not {actual}");
     }
 
-    Assert(macControl.IsMatch(NotepadShortcutIds.Open, Input("O", ShortcutModifiers.Control)),
+    Assert(macControl.IsMatch(NotepadShortcutIds.Open, ShortcutInputFor("O", ShortcutModifiers.Control)),
         "the macOS Control preference must accept Control+O");
-    Assert(!macControl.IsMatch(NotepadShortcutIds.Open, Input("O", ShortcutModifiers.Command)),
+    Assert(!macControl.IsMatch(NotepadShortcutIds.Open, ShortcutInputFor("O", ShortcutModifiers.Command)),
         "the macOS Control preference must stop Command+O from opening files");
-    Assert(!macCommand.IsMatch(NotepadShortcutIds.Open, Input("O", ShortcutModifiers.Control)),
+    Assert(!macCommand.IsMatch(NotepadShortcutIds.Open, ShortcutInputFor("O", ShortcutModifiers.Control)),
         "the macOS Command preference must not react to Control+O");
     Assert(macControl.IsMatch(
             NotepadShortcutIds.ZoomIn,
-            Input("OemPlus", ShortcutModifiers.Control | ShortcutModifiers.Shift)),
-        "the macOS Control preference must remap alternate gestures too");
-    Assert(macControl.IsMatch(NotepadShortcutIds.ZoomOut, Input("NumPadSubtract", ShortcutModifiers.Control)),
-        "the macOS Control preference must remap numeric-keypad zoom");
-    Assert(macControl.IsMatch(NotepadShortcutIds.RestoreDefaultZoom, Input("D0", ShortcutModifiers.Control)),
+            ShortcutInputFor("OemPlus", ShortcutModifiers.Control | ShortcutModifiers.Shift)),
+        "the macOS Control preference must apply to alternate gestures too");
+    Assert(macControl.IsMatch(NotepadShortcutIds.ZoomOut, ShortcutInputFor("NumPadSubtract", ShortcutModifiers.Control)),
+        "the macOS Control preference must apply to numeric-keypad zoom");
+    Assert(macControl.IsMatch(NotepadShortcutIds.RestoreDefaultZoom, ShortcutInputFor("D0", ShortcutModifiers.Control)),
         "the macOS Control preference must restore the default zoom with Control+0");
     Assert(macControl.GetConflicts().Count == 0,
         "the macOS Control preference must not introduce duplicate gestures");
     Assert(macControl.ValidateConventions().All(issue => issue.Severity != ShortcutConventionSeverity.Error),
         "the macOS Control preference must avoid reserved or conflicting system gestures");
 
+    foreach (var definition in NotepadShortcutCatalog.CreateDefinitions())
+    {
+        Assert(macControl.GetGestureDisplayTexts(definition.Id)
+                .SequenceEqual(definition.ResolveGestures(ShortcutPlatform.Windows).Select(macControl.FormatGesture).Distinct()),
+            $"the macOS Control preference must give {definition.Id} exactly the Windows gestures");
+    }
+
+    // Switching the setting live re-resolves the registered shortcuts.
+    var changes = 0;
+    macCommand.GesturesChanged += (_, _) => changes++;
+    macCommand.MacPrimaryModifier = MacPrimaryModifier.Control;
+    Assert(changes == 1 && macCommand.GetGestureDisplayText(NotepadShortcutIds.Save) == "⌃S",
+        "changing the macOS modifier must apply to registered shortcuts and announce the change");
+
     foreach (var platform in new[] { ShortcutPlatform.Windows, ShortcutPlatform.Linux })
     {
-        var command = CreateService(platform, MacOSShortcutModifier.Command);
-        var control = CreateService(platform, MacOSShortcutModifier.Control);
+        var command = CreateShortcutService(platform, MacPrimaryModifier.Command);
+        var control = CreateShortcutService(platform, MacPrimaryModifier.Control);
         foreach (var definition in NotepadShortcutCatalog.CreateDefinitions())
         {
             Assert(command.GetGestureDisplayTexts(definition.Id)

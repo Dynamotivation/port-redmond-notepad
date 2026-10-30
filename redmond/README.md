@@ -41,18 +41,26 @@ hide the menu and pause collection without discarding the saved list.
 ## Keyboard shortcuts
 
 `NotepadShortcutCatalog` in `Redmond.Notepad.Core` defines every shortcut once,
-with the Windows Notepad binding as the default and a macOS binding that
-follows native conventions (for example ⌘T for a new tab and ⌘G for Find
-next). Menus, the native macOS menu bar, and tooltips read their gesture text
-from the same catalog.
+with the Windows Notepad gesture written platform-neutrally (`Primary+N`,
+`Primary+Shift+S`, `F3`). There are no per-platform gesture tables: every
+platform uses the same keys, and only the `Primary` modifier differs. It is
+Ctrl on Windows and Linux and Command on macOS; `Redmond.Shortcuts` in
+`redmond-commons` resolves it. So Find next is F3, Replace is ⌘H and Go to is
+⌘G on macOS, just like F3, Ctrl+H and Ctrl+G on Windows.
 
-On macOS, Settings → Appearance → *Keyboard shortcuts* chooses the modifier
-that carries those shortcuts: *Command (⌘)*, the default, or *Control (⌃)*.
-Control keeps the macOS keys and swaps only the modifier, so ⌘T becomes ⌃T and
-⌥⌘F becomes ⌃⌥F. The choice applies live to every open window and is stored in
-`macos-shortcut-modifier.txt` in the settings directory. The card is hidden on
-Windows and Linux, where the preference has no effect. System items in the
-macOS application menu, such as Settings… (⌘,), keep Command.
+Menus, tooltips and the native macOS menu bar take their gesture text from the
+shared `ShortcutService`, which labels keys for the platform and the keyboard
+layout's language (`Strg+Umschalt+S` on German Windows, `⇧⌘S` on macOS). The
+Fluent menus show it through `MenuItemShortcut.Text`; native menu items get
+the resolved gesture and AppKit draws it. Never write gesture text by hand.
+
+On macOS, Settings → Appearance → *Shortcut modifier key* chooses what
+`Primary` means: *Command (⌘)*, the default, or *Control (⌃)*. With Control,
+every shortcut is exactly its Windows gesture. The choice applies live to every
+open window and is stored in `macos-shortcut-modifier.txt` in the settings
+directory. The card is hidden on Windows and Linux, where the preference has no
+effect. System items in the macOS application menu, such as Settings… (⌘,),
+are not Notepad shortcuts and keep Command.
 
 ## Build and verify
 
