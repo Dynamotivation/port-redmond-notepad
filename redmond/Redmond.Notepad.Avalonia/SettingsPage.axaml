@@ -72,8 +72,8 @@
         </shared:SettingsCard>
 
         <shared:SettingsCard x:Name="MacOSShortcutModifierCard"
-                             Header="Keyboard shortcuts"
-                             Description="Choose whether shortcuts use Command or Control"
+                             Header="Shortcut modifier key"
+                             Description="Choose the key used for shortcuts such as new tab, find and copy"
                              IsVisible="False">
           <shared:SettingsCard.Icon>
             <TextBlock HorizontalAlignment="Center"
