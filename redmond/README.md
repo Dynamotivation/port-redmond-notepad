@@ -45,8 +45,21 @@ with the Windows Notepad gesture written platform-neutrally (`Primary+N`,
 `Primary+Shift+S`, `F3`). There are no per-platform gesture tables: every
 platform uses the same keys, and only the `Primary` modifier differs. It is
 Ctrl on Windows and Linux and Command on macOS; `Redmond.Shortcuts` in
-`redmond-commons` resolves it. So Find next is F3, Replace is ⌘H and Go to is
-⌘G on macOS, just like F3, Ctrl+H and Ctrl+G on Windows.
+`redmond-commons` resolves it. So Find next is F3 and Go to is ⌘G on macOS,
+just like F3 and Ctrl+G on Windows.
+
+No shortcut may take a reserved macOS system or app-menu shortcut
+(`MacOSReservedShortcuts` in `Redmond.Shortcuts`). When a Windows Notepad
+gesture would, it changes on every platform instead of getting a macOS variant:
+
+| Command | Windows Notepad | Redmond Notepad | Reason |
+| --- | --- | --- | --- |
+| Replace | Ctrl+H | Primary+Shift+H | ⌘H hides the app on macOS |
+| Settings | — | Primary+, | ⌘, is the macOS Settings command; it is now one shortcut everywhere |
+
+⌘N (new tab), ⌘W (close tab) and ⌘, (Settings) are the standard macOS New,
+Close and Settings commands, so they stay. `Redmond.Notepad.Verification`
+asserts that nothing else collides, for both modifier settings.
 
 Menus, tooltips and the native macOS menu bar take their gesture text from the
 shared `ShortcutService`, which labels keys for the platform and the keyboard
@@ -59,8 +72,8 @@ On macOS, Settings → Appearance → *Shortcut modifier key* chooses what
 every shortcut is exactly its Windows gesture. The choice applies live to every
 open window and is stored in `macos-shortcut-modifier.txt` in the settings
 directory. The card is hidden on Windows and Linux, where the preference has no
-effect. System items in the macOS application menu, such as Settings… (⌘,),
-are not Notepad shortcuts and keep Command.
+effect. The Settings… item in the macOS application menu uses the catalog's
+Settings shortcut, so it follows the choice too.
 
 ## Build and verify
 

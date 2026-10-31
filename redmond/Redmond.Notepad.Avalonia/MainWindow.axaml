@@ -61,6 +61,7 @@
       <FontFamily x:Key="RedmondFluentIconFont">avares://Redmond.Avalonia.Controls/Assets/RedmondFluentIcons.ttf#Calculator Fluent Icons</FontFamily>
       <x:String x:Key="CloseTabToolTip">Close tab</x:String>
       <x:String x:Key="NewTabToolTip">New tab</x:String>
+      <x:String x:Key="SettingsToolTip">Settings</x:String>
     </ResourceDictionary>
   </Window.Resources>
 
@@ -534,7 +535,7 @@
               HorizontalContentAlignment="Center"
               VerticalContentAlignment="Center"
               Click="OnSettingsClick"
-              ToolTip.Tip="Settings"
+              ToolTip.Tip="{DynamicResource SettingsToolTip}"
               AutomationProperties.Name="Settings">
         <TextBlock FontFamily="{StaticResource RedmondFluentIconFont}"
                    HorizontalAlignment="Center"

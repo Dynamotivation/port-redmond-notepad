@@ -1371,6 +1371,9 @@ public partial class MainWindow : Window
         RefreshNativeMenuGestures();
         Resources["CloseTabToolTip"] = FormatCommandToolTip("Close tab", NotepadShortcutIds.CloseTab);
         Resources["NewTabToolTip"] = FormatCommandToolTip("New tab", NotepadShortcutIds.NewTab);
+        Resources["SettingsToolTip"] = FormatCommandToolTip("Settings", NotepadShortcutIds.Settings);
+        App.SetNativeMacOSSettingsGesture(
+            AvaloniaShortcutAdapter.ToKeyGesture(_shortcutService.GetGesture(NotepadShortcutIds.Settings)));
     }
 
     private void ConfigureFileMenuShortcuts()
@@ -1520,6 +1523,9 @@ public partial class MainWindow : Window
                 break;
             case NotepadShortcutIds.RestoreDefaultZoom:
                 SetZoom(100);
+                break;
+            case NotepadShortcutIds.Settings:
+                ShowSettingsPage();
                 break;
         }
     }

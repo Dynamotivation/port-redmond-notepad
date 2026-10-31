@@ -336,13 +336,14 @@ static void VerifyShortcutConventions()
         [NotepadShortcutIds.Find] = "Ctrl+F",
         [NotepadShortcutIds.FindNext] = "F3",
         [NotepadShortcutIds.FindPrevious] = "Shift+F3",
-        [NotepadShortcutIds.Replace] = "Ctrl+H",
+        [NotepadShortcutIds.Replace] = "Ctrl+Shift+H",
         [NotepadShortcutIds.GoTo] = "Ctrl+G",
         [NotepadShortcutIds.SelectAll] = "Ctrl+A",
         [NotepadShortcutIds.TimeDate] = "F5",
         [NotepadShortcutIds.ZoomIn] = "Ctrl+Plus",
         [NotepadShortcutIds.ZoomOut] = "Ctrl+Minus",
         [NotepadShortcutIds.RestoreDefaultZoom] = "Ctrl+0",
+        [NotepadShortcutIds.Settings] = "Ctrl+,",
     };
     foreach (var (shortcutId, expectedGesture) in windowsGestures)
     {
@@ -361,11 +362,12 @@ static void VerifyShortcutConventions()
         [NotepadShortcutIds.Delete] = "⌦",
         [NotepadShortcutIds.FindNext] = "F3",
         [NotepadShortcutIds.FindPrevious] = "⇧F3",
-        [NotepadShortcutIds.Replace] = "⌘H",
+        [NotepadShortcutIds.Replace] = "⇧⌘H",
         [NotepadShortcutIds.GoTo] = "⌘G",
         [NotepadShortcutIds.TimeDate] = "F5",
         [NotepadShortcutIds.ZoomIn] = "⌘+",
         [NotepadShortcutIds.RestoreDefaultZoom] = "⌘0",
+        [NotepadShortcutIds.Settings] = "⌘,",
     };
     foreach (var (shortcutId, expectedGesture) in macOSGestures)
     {
@@ -417,6 +419,33 @@ static void VerifyShortcutConventions()
         "Notepad shortcuts must not contain duplicate active gestures");
     Assert(macOS.ValidateConventions().All(issue => issue.Severity != ShortcutConventionSeverity.Error),
         "macOS shortcuts must avoid reserved or conflicting system gestures");
+    VerifyNoMacOSCollisions();
+}
+
+static void VerifyNoMacOSCollisions()
+{
+    // Cmd+N, Cmd+W and Cmd+, are the macOS New, Close and Settings commands;
+    // Notepad binds them to exactly those commands. Anything else that
+    // collides with a reserved macOS shortcut must get a new key everywhere.
+    var conventional = new Dictionary<string, string>
+    {
+        [NotepadShortcutIds.NewTab] = "N",
+        [NotepadShortcutIds.CloseTab] = "W",
+        [NotepadShortcutIds.Settings] = "OEMCOMMA",
+    };
+    foreach (var modifier in new[] { MacPrimaryModifier.Command, MacPrimaryModifier.Control })
+    {
+        var mac = CreateShortcutService(ShortcutPlatform.MacOS, modifier);
+        var collisions = mac.ValidateConventions().Where(issue => issue.IsCollision).ToArray();
+        var unexpected = collisions
+            .Where(issue => issue.Severity != ShortcutConventionSeverity.Warning
+                || !conventional.TryGetValue(issue.ShortcutId, out var key)
+                || issue.Gesture.Key.Value != key)
+            .ToArray();
+        Assert(unexpected.Length == 0,
+            $"Notepad shortcuts collide with macOS ({modifier}): "
+            + string.Join("; ", unexpected.Select(issue => $"{issue.ShortcutId}: {issue.Message}")));
+    }
 }
 
 static void VerifyMacOSShortcutModifierPreference()
@@ -441,7 +470,7 @@ static void VerifyMacOSShortcutModifierPreference()
         [NotepadShortcutIds.SaveAll] = "⌃⌥S",
         [NotepadShortcutIds.Copy] = "⌃C",
         [NotepadShortcutIds.FindNext] = "F3",
-        [NotepadShortcutIds.Replace] = "⌃H",
+        [NotepadShortcutIds.Replace] = "⌃⇧H",
         [NotepadShortcutIds.GoTo] = "⌃G",
         [NotepadShortcutIds.Delete] = "⌦",
         [NotepadShortcutIds.TimeDate] = "F5",
