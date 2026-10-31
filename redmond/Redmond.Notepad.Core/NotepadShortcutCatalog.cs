@@ -28,6 +28,7 @@ public static class NotepadShortcutIds
     public const string ZoomIn = "view.zoom-in";
     public const string ZoomOut = "view.zoom-out";
     public const string RestoreDefaultZoom = "view.restore-default-zoom";
+    public const string Settings = "app.settings";
 }
 
 /// <summary>
@@ -56,13 +57,15 @@ public static class NotepadShortcutCatalog
         Create(NotepadShortcutIds.Find, "Primary+F"),
         Create(NotepadShortcutIds.FindNext, "F3"),
         Create(NotepadShortcutIds.FindPrevious, "Shift+F3"),
-        Create(NotepadShortcutIds.Replace, "Primary+H"),
+        // Primary+H would be Cmd+H, which hides the app on macOS.
+        Create(NotepadShortcutIds.Replace, "Primary+Shift+H"),
         Create(NotepadShortcutIds.GoTo, "Primary+G"),
         Create(NotepadShortcutIds.SelectAll, "Primary+A"),
         Create(NotepadShortcutIds.TimeDate, "F5"),
         Create(NotepadShortcutIds.ZoomIn, "Primary+OemPlus", "Primary+Shift+OemPlus", "Primary+NumPadAdd"),
         Create(NotepadShortcutIds.ZoomOut, "Primary+OemMinus", "Primary+NumPadSubtract"),
         Create(NotepadShortcutIds.RestoreDefaultZoom, "Primary+D0"),
+        Create(NotepadShortcutIds.Settings, "Primary+OemComma"),
     ];
 
     private static ShortcutDefinition Create(string id, string gesture, params string[] alternates) =>
