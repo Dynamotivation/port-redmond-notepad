@@ -28,100 +28,49 @@ public static class NotepadShortcutIds
     public const string ZoomIn = "view.zoom-in";
     public const string ZoomOut = "view.zoom-out";
     public const string RestoreDefaultZoom = "view.restore-default-zoom";
+    public const string Settings = "app.settings";
 }
 
+/// <summary>
+/// Every Notepad shortcut, defined once with the Windows Notepad gesture. Primary is
+/// Ctrl on Windows and Linux and Command (or Control, by user choice) on macOS;
+/// <see cref="ShortcutPrimaryModifier"/> in Redmond.Shortcuts resolves it.
+/// </summary>
 public static class NotepadShortcutCatalog
 {
     public static IReadOnlyList<ShortcutDefinition> CreateDefinitions() =>
     [
-        Create(NotepadShortcutIds.NewTab, "N", ShortcutModifiers.Control, "T", ShortcutModifiers.Command),
-        Create(NotepadShortcutIds.NewWindow, "N", ShortcutModifiers.Control | ShortcutModifiers.Shift,
-            "N", ShortcutModifiers.Command),
-        Create(NotepadShortcutIds.Open, "O", ShortcutModifiers.Control, "O", ShortcutModifiers.Command),
-        Create(NotepadShortcutIds.Save, "S", ShortcutModifiers.Control, "S", ShortcutModifiers.Command),
-        Create(NotepadShortcutIds.SaveAs, "S", ShortcutModifiers.Control | ShortcutModifiers.Shift,
-            "S", ShortcutModifiers.Command | ShortcutModifiers.Shift),
-        Create(NotepadShortcutIds.SaveAll, "S", ShortcutModifiers.Control | ShortcutModifiers.Alt,
-            "S", ShortcutModifiers.Command | ShortcutModifiers.Alt),
-        Create(NotepadShortcutIds.Print, "P", ShortcutModifiers.Control, "P", ShortcutModifiers.Command),
-        Create(NotepadShortcutIds.CloseTab, "W", ShortcutModifiers.Control, "W", ShortcutModifiers.Command),
-        Create(NotepadShortcutIds.CloseWindow, "W", ShortcutModifiers.Control | ShortcutModifiers.Shift,
-            "W", ShortcutModifiers.Command | ShortcutModifiers.Shift),
-        Create(NotepadShortcutIds.Undo, "Z", ShortcutModifiers.Control, "Z", ShortcutModifiers.Command),
-        Create(NotepadShortcutIds.Cut, "X", ShortcutModifiers.Control, "X", ShortcutModifiers.Command),
-        Create(NotepadShortcutIds.Copy, "C", ShortcutModifiers.Control, "C", ShortcutModifiers.Command),
-        Create(NotepadShortcutIds.Paste, "V", ShortcutModifiers.Control, "V", ShortcutModifiers.Command),
-        Create(NotepadShortcutIds.Delete, "Delete", ShortcutModifiers.None, "Delete", ShortcutModifiers.None),
-        Create(NotepadShortcutIds.Find, "F", ShortcutModifiers.Control, "F", ShortcutModifiers.Command),
-        Create(NotepadShortcutIds.FindNext, "F3", ShortcutModifiers.None, "G", ShortcutModifiers.Command),
-        Create(NotepadShortcutIds.FindPrevious, "F3", ShortcutModifiers.Shift,
-            "G", ShortcutModifiers.Command | ShortcutModifiers.Shift),
-        Create(NotepadShortcutIds.Replace, "H", ShortcutModifiers.Control,
-            "F", ShortcutModifiers.Command | ShortcutModifiers.Alt),
-        Create(NotepadShortcutIds.GoTo, "G", ShortcutModifiers.Control, "L", ShortcutModifiers.Command),
-        Create(NotepadShortcutIds.SelectAll, "A", ShortcutModifiers.Control, "A", ShortcutModifiers.Command),
-        Create(NotepadShortcutIds.TimeDate, "F5", ShortcutModifiers.None, "F5", ShortcutModifiers.None),
-        new ShortcutDefinition(
-            NotepadShortcutIds.ZoomIn,
-            new ShortcutGesture(ShortcutKey.Named("OemPlus"), ShortcutModifiers.Control),
-            new Dictionary<ShortcutPlatform, ShortcutGesture>
-            {
-                [ShortcutPlatform.MacOS] = new(ShortcutKey.Named("OemPlus"), ShortcutModifiers.Command),
-            },
-            alternateGestures:
-            [
-                new ShortcutGesture(
-                    ShortcutKey.Named("OemPlus"),
-                    ShortcutModifiers.Control | ShortcutModifiers.Shift),
-                new ShortcutGesture(ShortcutKey.Named("NumPadAdd"), ShortcutModifiers.Control),
-            ],
-            platformAlternateGestures: new Dictionary<ShortcutPlatform, IReadOnlyList<ShortcutGesture>>
-            {
-                [ShortcutPlatform.MacOS] =
-                [
-                    new ShortcutGesture(
-                        ShortcutKey.Named("OemPlus"),
-                        ShortcutModifiers.Command | ShortcutModifiers.Shift),
-                    new ShortcutGesture(ShortcutKey.Named("NumPadAdd"), ShortcutModifiers.Command),
-                ],
-            }),
-        new ShortcutDefinition(
-            NotepadShortcutIds.ZoomOut,
-            new ShortcutGesture(ShortcutKey.Named("OemMinus"), ShortcutModifiers.Control),
-            new Dictionary<ShortcutPlatform, ShortcutGesture>
-            {
-                [ShortcutPlatform.MacOS] = new(ShortcutKey.Named("OemMinus"), ShortcutModifiers.Command),
-            },
-            alternateGestures:
-            [
-                new ShortcutGesture(ShortcutKey.Named("NumPadSubtract"), ShortcutModifiers.Control),
-            ],
-            platformAlternateGestures: new Dictionary<ShortcutPlatform, IReadOnlyList<ShortcutGesture>>
-            {
-                [ShortcutPlatform.MacOS] =
-                [
-                    new ShortcutGesture(ShortcutKey.Named("NumPadSubtract"), ShortcutModifiers.Command),
-                ],
-            }),
-        Create(
-            NotepadShortcutIds.RestoreDefaultZoom,
-            "D0",
-            ShortcutModifiers.Control,
-            "D0",
-            ShortcutModifiers.Command),
+        Create(NotepadShortcutIds.NewTab, "Primary+N"),
+        Create(NotepadShortcutIds.NewWindow, "Primary+Shift+N"),
+        Create(NotepadShortcutIds.Open, "Primary+O"),
+        Create(NotepadShortcutIds.Save, "Primary+S"),
+        Create(NotepadShortcutIds.SaveAs, "Primary+Shift+S"),
+        Create(NotepadShortcutIds.SaveAll, "Primary+Alt+S"),
+        Create(NotepadShortcutIds.Print, "Primary+P"),
+        Create(NotepadShortcutIds.CloseTab, "Primary+W"),
+        Create(NotepadShortcutIds.CloseWindow, "Primary+Shift+W"),
+        Create(NotepadShortcutIds.Undo, "Primary+Z"),
+        Create(NotepadShortcutIds.Cut, "Primary+X"),
+        Create(NotepadShortcutIds.Copy, "Primary+C"),
+        Create(NotepadShortcutIds.Paste, "Primary+V"),
+        Create(NotepadShortcutIds.Delete, "Delete"),
+        Create(NotepadShortcutIds.Find, "Primary+F"),
+        Create(NotepadShortcutIds.FindNext, "F3"),
+        Create(NotepadShortcutIds.FindPrevious, "Shift+F3"),
+        // Primary+H would be Cmd+H, which hides the app on macOS.
+        Create(NotepadShortcutIds.Replace, "Primary+Shift+H"),
+        Create(NotepadShortcutIds.GoTo, "Primary+G"),
+        Create(NotepadShortcutIds.SelectAll, "Primary+A"),
+        Create(NotepadShortcutIds.TimeDate, "F5"),
+        Create(NotepadShortcutIds.ZoomIn, "Primary+OemPlus", "Primary+Shift+OemPlus", "Primary+NumPadAdd"),
+        Create(NotepadShortcutIds.ZoomOut, "Primary+OemMinus", "Primary+NumPadSubtract"),
+        Create(NotepadShortcutIds.RestoreDefaultZoom, "Primary+D0"),
+        Create(NotepadShortcutIds.Settings, "Primary+OemComma"),
     ];
 
-    private static ShortcutDefinition Create(
-        string id,
-        string defaultKey,
-        ShortcutModifiers defaultModifiers,
-        string macOSKey,
-        ShortcutModifiers macOSModifiers) =>
+    private static ShortcutDefinition Create(string id, string gesture, params string[] alternates) =>
         new(
             id,
-            new ShortcutGesture(ShortcutKey.Named(defaultKey), defaultModifiers),
-            new Dictionary<ShortcutPlatform, ShortcutGesture>
-            {
-                [ShortcutPlatform.MacOS] = new(ShortcutKey.Named(macOSKey), macOSModifiers),
-            });
+            ShortcutGesture.Parse(gesture),
+            alternateGestures: alternates.Select(ShortcutGesture.Parse).ToArray());
 }
