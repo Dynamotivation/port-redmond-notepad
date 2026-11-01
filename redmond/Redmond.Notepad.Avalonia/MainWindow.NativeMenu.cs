@@ -9,6 +9,7 @@ namespace Redmond.Notepad.Avalonia;
 
 public partial class MainWindow
 {
+    private readonly List<(NativeMenuItem Item, string ShortcutId)> _nativeShortcutItems = [];
     private NativeMenu? _nativeMacOSWindowMenu;
     private NativeMenu? _nativeRecentFilesMenu;
     private NativeMenuItem? _nativeRecentFilesItem;
@@ -189,10 +190,19 @@ public partial class MainWindow
         if (shortcutId is not null)
         {
             item.Gesture = AvaloniaShortcutAdapter.ToKeyGesture(_shortcutService.GetGesture(shortcutId));
+            _nativeShortcutItems.Add((item, shortcutId));
         }
 
         item.Click += (_, _) => action();
         return item;
+    }
+
+    private void RefreshNativeMenuGestures()
+    {
+        foreach (var (item, shortcutId) in _nativeShortcutItems)
+        {
+            item.Gesture = AvaloniaShortcutAdapter.ToKeyGesture(_shortcutService.GetGesture(shortcutId));
+        }
     }
 
     private void RefreshNativeFileMenu()

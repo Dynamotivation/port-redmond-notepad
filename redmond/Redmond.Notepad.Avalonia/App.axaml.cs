@@ -111,6 +111,17 @@ public partial class App : Application
         }
     }
 
+    internal static void SetNativeMacOSSettingsGesture(KeyGesture gesture)
+    {
+        if (!OperatingSystem.IsMacOS() || Current is null)
+        {
+            return;
+        }
+
+        EnsureNativeMacOSApplicationMenu();
+        s_nativeMacOSSettingsItem!.Gesture = gesture;
+    }
+
     private static NativeMenu EnsureNativeMacOSApplicationMenu()
     {
         if (s_nativeMacOSApplicationMenu is not null)
@@ -119,10 +130,9 @@ public partial class App : Application
         }
 
         s_nativeMacOSApplicationMenu = new NativeMenu();
-        s_nativeMacOSSettingsItem = new NativeMenuItem("Settings…")
-        {
-            Gesture = new KeyGesture(Key.OemComma, KeyModifiers.Meta),
-        };
+        // The gesture comes from NotepadShortcutIds.Settings; each window sets it
+        // through SetNativeMacOSSettingsGesture, following the modifier setting.
+        s_nativeMacOSSettingsItem = new NativeMenuItem("Settings…");
         s_nativeMacOSSettingsItem.Click += (_, _) =>
         {
             if (Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
